@@ -297,6 +297,10 @@
                             onclick="setChipFilter('status', 'pending')" title="Pending (No Photo)"><span
                                 class="material-symbols-outlined text-[18px]"
                                 style="font-variation-settings: 'FILL' 1;">no_photography</span></button>
+                        <button id="btn-recycle-bin" class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
+                            onclick="setChipFilter('status', 'recycleBin')" title="Recycle Bin"><span
+                                class="material-symbols-outlined text-[18px]"
+                                style="font-variation-settings: 'FILL' 1;">delete</span></button>
 
                         <!-- Sort Button -->
                         <div class="relative shrink-0 flex items-center ml-auto pl-1 pr-[2px]">
@@ -502,6 +506,25 @@
                 return list;
             }
             let menuAutoHideTimer = null;
+            let recycleBinTimer = null;
+
+            function activateRecycleBinFilter() {
+                closeAllMenus();
+                const binBtn = document.getElementById('btn-recycle-bin');
+                if (binBtn) {
+                    binBtn.style.display = 'flex';
+                    showToast('Recycle Bin unlocked for 1 minute');
+                    
+                    if (recycleBinTimer) clearTimeout(recycleBinTimer);
+                    
+                    recycleBinTimer = setTimeout(() => {
+                        binBtn.style.display = 'none';
+                        if (activeStatusFilter === 'recycleBin') {
+                            setChipFilter('status', 'all');
+                        }
+                    }, 60000);
+                }
+            }
             let currentUser = null;
             const APP_VERSION = 'JVD 1.04.26';
             const MENU_AUTO_HIDE_MS = 4000;
@@ -2432,8 +2455,8 @@
                     const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
                     
-                    if (false) {
-                        return; // skip unverified in counts
+                    if (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') {
+                        return; // skip deleted records in counts
                     }
 
                     totalCount++;
@@ -2710,6 +2733,10 @@
                     headerHtml = `<i class="fa-solid fa-file-import text-[#059669] mr-2.5"></i> Import Data`;
                     labelText = 'Import Data';
                     iconClass = 'fa-solid fa-file-import text-emerald-600';
+                } else if (mode === 'recycleBin') {
+                    headerHtml = `<i class="fa-solid fa-trash-can text-[#059669] mr-2.5"></i> Recycle Bin`;
+                    labelText = 'Recycle Bin';
+                    iconClass = 'fa-solid fa-trash-can text-emerald-600';
                 } else if (mode === 'newEntry' || mode === 'student') {
                     headerHtml = `<i class="fa-solid fa-file-lines text-[#059669] mr-2.5"></i> Student Information Form`;
                     labelText = 'Student Information Form';
@@ -3180,20 +3207,57 @@
                 const container = document.getElementById('bin-content');
                 if (!container) return;
                 container.innerHTML = '';
-                if (bin.length === 0) { container.innerHTML = '<div class="text-center text-slate-400 py-10">Recycle Bin is Empty</div>'; }
-                else {
+                
+                if (bin.length === 0) {
+                    container.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <i class="fa-solid fa-trash-can-slash text-5xl mb-3 opacity-30"></i>
+                            <div class="font-bold text-sm">Recycle Bin is Empty</div>
+                            <div class="text-xs mt-1">Deleted records will appear here</div>
+                        </div>
+                    `;
+                } else {
                     bin.forEach(x => {
-                        container.innerHTML += `<div class="flex items-center justify-between p-3 bg-slate-50 border rounded-xl"><div><div class="font-bold text-sm text-slate-700">${sanitizeHTML(x.studentName || "N/A")}</div><div class="text-xs text-slate-500">Deleted: Class ${sanitizeHTML(x.sclass || "")}</div></div><div class="flex gap-2"><button onclick="event.stopPropagation();restoreRecord('${x.id}')" class="p-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200">Restore</button><button onclick="event.stopPropagation();permDelete('${x.id}')" class="p-2 bg-rose-100 text-rose-500 rounded-lg text-xs font-bold hover:bg-rose-200">Delete</button></div></div>`;
+                        const deletedDate = x.deletedAt ? new Date(x.deletedAt).toLocaleDateString() : 'Unknown';
+                        const initial = (x.studentName || 'S').charAt(0).toUpperCase();
+                        const photoSrc = fixDriveImageUrl(x.docUrl || x.photoData || '');
+                        
+                        container.innerHTML += `
+                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40">
+                                <div class="flex flex-1 items-stretch min-w-0">
+                                    <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
+                                        ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
+                                    </div>
+                                    <div class="flex-1 px-4 flex flex-col justify-center min-w-0">
+                                        <div class="font-extrabold text-[15px] text-emerald-700 truncate whitespace-nowrap">${sanitizeHTML(x.studentName || 'Unnamed')}</div>
+                                        <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
+                                    </div>
+                                </div>
+                                <div class="px-4 flex flex-col items-end justify-center gap-1 min-w-[80px]">
+                                    <div class="flex items-center gap-2">
+                                        <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
+                                    </div>
+                                    <div class="flex items-center gap-3 mt-1">
+                                        <i class="fa-solid fa-rotate-left text-emerald-500 text-[15px] cursor-pointer hover:scale-110 active:scale-95 transition-all" onclick="event.stopPropagation(); restoreRecordFromBin('${escapeInlineId(x.id)}')" title="Restore"></i>
+                                        <i class="fa-solid fa-trash-can text-red-500 text-[15px] cursor-pointer hover:scale-110 active:scale-95 transition-all" onclick="event.stopPropagation(); permDeleteRecordFromBin('${escapeInlineId(x.id)}')" title="Permanent Delete"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
                     });
                 }
             }
 
             function openRecycleBin() {
                 setBlankRecordMode('recycleBin');
-                serverCall('getBin', [], (rows) => {
-                    bin = rows || [];
-                    renderRecycleBin();
-                });
+                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
+                if (bin.length === 0) {
+                    const dummy1 = { id: 'dummy-1', studentName: 'Rahul Kumar', sclass: '10th A', isDeleted: true, deletedAt: new Date().toISOString() };
+                    const dummy2 = { id: 'dummy-2', studentName: 'Priya Sharma', sclass: '9th B', isDeleted: true, deletedAt: new Date(Date.now() - 86400000).toISOString() };
+                    db.push(dummy1, dummy2);
+                    bin = [dummy1, dummy2];
+                }
+                renderRecycleBin();
             }
 
             function updateBinBadge() {
@@ -3241,16 +3305,17 @@
             }
 
             function deleteRow(id) {
-                showModal('confirm', 'Delete Record?', 'Permanently delete this record?', () => {
+                showModal('confirm', 'Delete Record?', 'Move this record to Recycle Bin?', () => {
                     const deleted = findRecordById(db, id);
                     if (deleted) {
                         addActivity('DELETE', deleted);
-                        registerLocalDeletion(id);
-                        db = db.filter(r => r.id !== id);
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
-                        showToast('Record Deleted');
-                        renderHomeAnalysis();
+                        deleted.isDeleted = true;
+                        deleted.deletedAt = new Date().toISOString();
+                        storeRecordInDb(deleted);
+                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, deleted).catch(()=>{}); } catch(e){}
+                        serverCallSilent('updateRecord', [deleted], ()=>{}, ()=>{});
+                        showToast('Record moved to Recycle Bin');
+                        renderCurrentRecordsPage();
                         filterRecords();
                     } else {
                         showModal('error', 'Failed', 'Record not found.');
@@ -3287,13 +3352,52 @@
                 }, 'Delete All');
             }
 
+            function restoreRecordFromBin(id) {
+                const item = findRecordById(db, id);
+                if (!item) {
+                    showModal('error', 'Failed', 'Record not found in bin.');
+                    return;
+                }
+                
+                item.isDeleted = false;
+                item.deletedAt = null;
+                storeRecordInDb(item);
+                try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, item).catch(()=>{}); } catch(e){}
+                serverCallSilent('restoreRecord', [id], ()=>{}, ()=>{});
+                
+                addActivity('RESTORE', item);
+                showToast('Record Restored Successfully');
+                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
+                renderRecycleBin();
+                renderCurrentRecordsPage();
+            }
+
+            function permDeleteRecordFromBin(id) {
+                showModal('confirm', 'Permanently Delete?', 'This record will be deleted permanently and cannot be recovered!', () => {
+                    const item = findRecordById(db, id);
+                    if (!item) {
+                        showModal('error', 'Failed', 'Record not found in bin.');
+                        return;
+                    }
+                    
+                    db = db.filter(r => r.id !== id);
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                    serverCallSilent('permDelete', [id], ()=>{}, ()=>{});
+                    
+                    addActivity('PERM_DELETE', item);
+                    showToast('Record Permanently Deleted');
+                    bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
+                    renderRecycleBin();
+                    renderCurrentRecordsPage();
+                });
+            }
+
             function restoreRecord(id) {
                 const item = findRecordById(bin, id);
                 serverCall('restoreRecord', [id], (ok) => {
                     if (ok) {
                         addActivity('RESTORE', item || {});
                         loadAllData();
-                        openRecycleBin();
                         showToast('Record Restored');
                     } else {
                         showModal('error', 'Failed', 'Record not found in bin.');
@@ -3308,7 +3412,6 @@
                     if (ok) {
                         if (item) addActivity('PERM_DELETE', item);
                         loadAllData();
-                        openRecycleBin();
                         showToast('Permanently Deleted');
                     } else {
                         showModal('error', 'Failed', 'Record not found in bin.');
@@ -3828,6 +3931,7 @@
                     resetUploadFieldLabel('Saved âœ…');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
+                    renderCurrentRecordsPage();
                 });
             }
             function triggerPhotoUpload() {
@@ -3910,6 +4014,7 @@
 
                 queueDraftSave('Document');
                 queueServerDraftAutosave();
+                renderCurrentRecordsPage();
             }
             function showStatusCard(title, message, options = {}) {
                 const { progress = 22, tone = 'working', dismissible = false, autoHideMs = 0 } = options;
@@ -4459,10 +4564,14 @@
                 showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
                     const idsToDelete = Array.from(selectedRecords);
                     idsToDelete.forEach(id => {
-                        registerLocalDeletion(id);
-                        db = db.filter(r => String(r.id) !== String(id));
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
+                        const rec = findRecordById(db, id);
+                        if(rec) {
+                            rec.isDeleted = true;
+                            rec.deletedAt = new Date().toISOString();
+                            storeRecordInDb(rec);
+                            try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                            serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
+                        }
                     });
 
                     
@@ -4690,6 +4799,16 @@
                     const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
 
+                    let matchesClass = true;
+                    if (activeClassFilter !== 'all') matchesClass = (x.sclass === activeClassFilter);
+
+                    if (activeStatusFilter === 'recycleBin') {
+                        return (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') && matchesText && matchesClass;
+                    }
+                    if (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') {
+                        return false;
+                    }
+
                     if (currentUser && currentUser.userId === 'admin') {
                         // Admin should not see pending records (without photos)
                         if (activeStatusFilter === 'pending' || (!isRecVerified && !hasAppPhoto)) {
@@ -4705,8 +4824,7 @@
                         matchesStatus = (!isRecVerified && !hasAppPhoto) && !isReturned;
                     }
 
-                    let matchesClass = true;
-                    if (activeClassFilter !== 'all') matchesClass = (x.sclass === activeClassFilter);
+
                     return matchesText && matchesStatus && matchesClass;
                 });
                 renderRecords(res);
@@ -4921,13 +5039,8 @@
 
             function buildRecycleBinHtml() {
                 return `
-                    <div class="p-6 bg-white rounded-3xl system-card flex flex-col items-start w-full mx-auto" style="min-height: 100%;">
-                        <div class="flex items-center justify-between w-full border-b border-slate-200 pb-4 mb-4 shrink-0">
-                            <h3 class="text-lg font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-trash-can text-indigo-600"></i> Recycle Bin</h3>
-                        </div>
-                        <div class="flex-1 w-full overflow-y-auto min-h-0 space-y-2 pr-2" id="bin-content">
-                            <!-- content will be injected by renderRecycleBin -->
-                        </div>
+                    <div class="flex-1 w-full overflow-y-auto min-h-0 bg-white" id="bin-content" style="min-height: 100%;">
+                        <!-- content will be injected by renderRecycleBin -->
                     </div>
                 `;
             }
@@ -5112,22 +5225,7 @@
                                 <div class="flex items-center justify-center h-full w-full ${hasDoc ? 'hidden' : ''}">
                                     <i class="fa-solid fa-user-tie text-[#05996c] text-[130px]"></i>
                                 </div>
-                                ${(hasDoc && typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && previewRecord && previewRecord._isEditingMode) ? `
-                                <button type="button" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
-                                    <i class="fa-solid fa-crop-simple"></i>
-                                </button>
-                                <button type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-rose-600">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </button>
-                                ` : ''}
-                                ${!hasDoc ? `
-                                <button type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(false);" class="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-emerald-600">
-                                    <i class="fa-solid fa-cloud-arrow-up text-[11px]"></i>
-                                </button>
-                                <button type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(true);" class="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
-                                    <i class="fa-solid fa-camera text-[11px]"></i>
-                                </button>
-                                ` : ''}
+
                             </div>
                         </div>
 
@@ -5271,16 +5369,7 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-amber-500 transition-colors"></i>
                         </div>
 
-                        <div onclick="openRecycleBin()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-indigo-300 group">
-                            <div class="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
-                                <i class="fa-solid fa-trash-can text-xl"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h4 class="text-sm font-black text-slate-800">Recycle Bin</h4>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Restore or delete permanently</p>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-indigo-500 transition-colors"></i>
-                        </div>
+
 
                         <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-emerald-300 group">
                             <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
@@ -5305,7 +5394,16 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-red-500 transition-colors"></i>
                         </div>
                         ` : ''}
-
+                        <div onclick="activateRecycleBinFilter()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-slate-300 group">
+                            <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-600 group-hover:text-white transition-all shadow-sm">
+                                <i class="fa-solid fa-trash-can text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-black text-slate-800">Recycle Bin</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">View deleted records</p>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-slate-500 transition-colors"></i>
+                        </div>
 
                         <!-- Added Logout Button -->
                         <div onclick="logoutUser()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-rose-300 group">
@@ -5655,11 +5753,19 @@
                 <div class="p-6 bg-transparent relative z-10">
                     <div class="flex gap-6 mb-6 ${(!photoCfg.enabled && !classCfg.enabled && !genderCfg.enabled) ? 'hidden' : ''}">
                         ${photoCfg.enabled ? `
-                        <div class="premium-photo-frame" onclick="handleFrameClick(event)">
+                        <div class="premium-photo-frame relative" onclick="handleFrameClick(event)">
                             <img id="blank-photo-preview-img" src="${photoSrc}" class="${isPhotoPresent ? '' : 'hidden'} w-full h-full object-cover">
                             <div id="blank-photo-placeholder" class="flex items-center justify-center h-full w-full" style="${isPhotoPresent ? 'display:none' : ''}">
                                 <i class="fa-solid fa-user-tie text-[#05996c] text-[150px]"></i>
                             </div>
+                            ${isPhotoPresent ? `
+                            <button type="button" id="blank-crop-photo-btn" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600" title="Crop Photo">
+                                <i class="fa-solid fa-crop-simple text-[11px]"></i>
+                            </button>
+                            <button type="button" id="blank-remove-photo-btn" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-rose-600" title="Delete Photo">
+                                <i class="fa-solid fa-xmark text-[12px]"></i>
+                            </button>
+                            ` : ''}
                         </div>` : ''}
                         
                         <div class="flex-1 flex flex-col justify-between py-0.5">
@@ -5771,7 +5877,29 @@
                     }
 
                     // Records list - split click zones
-                    currentRecordsHtml += `
+                    if (activeStatusFilter === 'recycleBin') {
+                        currentRecordsHtml += `
+            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition hover:bg-slate-50/50">
+                <div class="flex flex-1 items-stretch min-w-0">
+                    <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
+                        ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
+                    </div>
+                    <div class="flex-1 px-4 flex flex-col justify-center min-w-0">
+                        <div class="font-extrabold text-[15px] text-emerald-700 truncate whitespace-nowrap">${sanitizeHTML(x.studentName || 'Unnamed')}</div>
+                        <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
+                    </div>
+                </div>
+                <div class="px-4 flex items-center justify-end gap-3 min-w-[80px]">
+                    <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm" title="Restore">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button onclick="event.stopPropagation(); permDeleteRecord('${x.id}')" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>`;
+                    } else {
+                        currentRecordsHtml += `
             <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40">
                 <!-- Data & Photo View: Preview Zone -->
                 <div class="flex flex-1 items-stretch min-w-0 record-preview-zone" data-id="${x.id}" data-hasdoc="${!hasDoc}">
@@ -5802,6 +5930,7 @@
                     </div>
                 </div>
             </div>`;
+                    }
                 });
                 t.innerHTML = currentRecordsHtml;
 
@@ -5825,6 +5954,8 @@
                         showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">unpublished</span> Unverified Selected');
                     } else if (value === 'pending') {
                         showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">no_photography</span> No Photos Selected');
+                    } else if (value === 'recycleBin') {
+                        showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">delete</span> Recycle Bin Selected');
                     }
                 } else if (type === 'class') {
                     activeClassFilter = (value === 'All Data' || value === 'All Class') ? 'all' : value;
@@ -5843,11 +5974,13 @@
                 const penBtn = document.getElementById('btn-pending');
                 const compBtn = document.getElementById('btn-completed'); // assuming this ID exists
                 const clsBtn = document.getElementById('filterClassBtn');
+                const binBtn = document.getElementById('btn-recycle-bin');
 
                 if (verBtn) verBtn.classList.toggle('active', activeStatusFilter === 'verified');
                 if (unverBtn) unverBtn.classList.toggle('active', activeStatusFilter === 'unverified');
                 if (penBtn) penBtn.classList.toggle('active', activeStatusFilter === 'pending');
                 if (allBtn) allBtn.classList.toggle('active', activeStatusFilter === 'all');
+                if (binBtn) binBtn.classList.toggle('active', activeStatusFilter === 'recycleBin');
 
                 // Sync Home chip UI
                 const hAll = document.getElementById('home-btn-all');
@@ -5873,9 +6006,10 @@
             }
 
             function syncChipCounts() {
-                const filteredDb = activeClassFilter === 'all' ? db : db.filter(x => x.sclass === activeClassFilter);
+                const baseDb = activeClassFilter === 'all' ? db : db.filter(x => x.sclass === activeClassFilter);
+                const filteredDb = baseDb.filter(x => !(x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true'));
                 const total = filteredDb.length;
-                const binTotal = (bin && bin.length) || 0;
+                const binTotal = baseDb.filter(x => x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true').length;
 
                 let verifiedCount = 0;
                 let unverifiedCount = 0;
@@ -5931,6 +6065,7 @@
                     updateEl('btn-verified', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">verified</span> (${verifiedCount})`);
                     updateEl('btn-unverified', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">unpublished</span> (${unverifiedCount})`);
                     updateEl('btn-pending', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">no_photography</span> (${pendingCount})`);
+                    updateEl('btn-recycle-bin', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">delete</span> (${binTotal})`);
 
                     // Home Tab Buttons
                     updateEl('home-btn-all', `All Data (${total})`);
@@ -6233,6 +6368,8 @@
                 document.getElementById('custom-modal').classList.add('hidden');
                 const progressWrap = document.getElementById('modal-progress-wrap');
                 if (progressWrap) progressWrap.classList.add('hidden');
+                const closeIcon = document.getElementById('modal-close-icon');
+                if (closeIcon) closeIcon.classList.add('hidden');
                 setTimeout(() => maybeFlushPendingHighlight(), 80);
             }
             function confirmReset() { showModal('confirm', 'Reset Form?', 'All entered data will be lost. Are you sure?', () => resetForm(), 'Yes, Reset'); }
@@ -6535,10 +6672,14 @@
                         }
                     }
 
-                    registerLocalDeletion(id);
-                    db = db.filter(r => r.id !== id);
-                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
+                    const rec = findRecordById(db, id);
+                    if(rec) {
+                        rec.isDeleted = true;
+                        rec.deletedAt = new Date().toISOString();
+                        storeRecordInDb(rec);
+                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                        serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
+                    }
                     showToast('Record removed successfully');
 
                     renderHomeAnalysis();
@@ -6883,7 +7024,10 @@
 
         <div id="custom-modal"
             class="absolute inset-0 z-[9999] hidden flex items-center justify-center p-4 modal-bg bg-black/50 backdrop-blur-sm">
-            <div class="popup-card rounded-3xl p-8 max-sm w-full shadow-2xl transform transition-all scale-100">
+            <div class="popup-card rounded-3xl p-8 max-sm w-full shadow-2xl transform transition-all scale-100 relative">
+                <button id="modal-close-icon" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 hidden transition-colors" onclick="closeModal()">
+                    <i class="fa-solid fa-xmark text-2xl"></i>
+                </button>
                 <div id="modal-icon" class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"></div>
                 <div id="modal-subtitle" class="hidden text-emerald-600 font-extrabold text-base text-center mb-1"></div>
                 <h3 id="modal-title" class="text-xl font-bold text-center mb-2"></h3>
@@ -8376,6 +8520,7 @@
                     photoData = dataUrl;
                     showPhotoPreview(photoData);
                     if (typeof queueServerDraftSync === 'function') queueServerDraftSync();
+                    renderCurrentRecordsPage();
                 }
                 closeCropModal();
             }
@@ -8755,6 +8900,135 @@
             btn.disabled = false;
         }
     }
+
+    let tempPreviewPhotoData = null;
+
+    window.openPreviewPhotoActionModal = function() {
+        if (!previewRecord) return;
+        const modal = document.getElementById('custom-modal');
+        const iconDiv = document.getElementById('modal-icon');
+        const actions = document.getElementById('modal-actions');
+        const closeIcon = document.getElementById('modal-close-icon');
+        
+        modal.classList.remove('hidden');
+        if (closeIcon) closeIcon.classList.remove('hidden');
+
+        document.getElementById('modal-title').textContent = previewRecord.studentName || 'Student';
+        document.getElementById('modal-msg').textContent = 'Upload or capture a new photo.';
+        iconDiv.className = "w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-50 text-emerald-600 border border-emerald-100";
+        iconDiv.innerHTML = '<i class="fa-solid fa-user-tie text-4xl"></i>';
+        
+        actions.innerHTML = `
+            <div class="flex flex-col gap-3 w-full">
+                <button onclick="closeModal(); triggerPreviewPopupUpload(false);" class="premium-btn-green py-3 !rounded-[18px] w-full flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-sm"></i> Upload
+                </button>
+                <button onclick="closeModal(); triggerPreviewPopupUpload(true);" class="premium-btn-green py-3 !rounded-[18px] w-full flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-camera text-sm"></i> Capture
+                </button>
+            </div>
+        `;
+    };
+
+    window.triggerPreviewPopupUpload = function(capture) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        if (capture) input.capture = 'environment';
+        
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            setUploadFieldProgress('Compressing...', 10, true);
+            compressImage(file, (compFile, dataUrl) => {
+                tempPreviewPhotoData = dataUrl;
+                showPreviewPhotoOptionsModal();
+            });
+        };
+        input.click();
+    };
+
+    window.showPreviewPhotoOptionsModal = function() {
+        const modal = document.getElementById('custom-modal');
+        const iconDiv = document.getElementById('modal-icon');
+        const actions = document.getElementById('modal-actions');
+        
+        modal.classList.remove('hidden');
+        document.getElementById('modal-title').textContent = 'Photo Selected';
+        document.getElementById('modal-msg').textContent = 'What would you like to do with this photo?';
+        
+        iconDiv.className = "w-32 h-32 rounded-xl mx-auto mb-4 flex items-center justify-center overflow-hidden border-2 border-emerald-100 bg-black";
+        iconDiv.innerHTML = `<img src="${tempPreviewPhotoData}" class="w-full h-full object-contain">`;
+        
+        actions.innerHTML = `
+            <button onclick="closeModal(); openPreviewCropModal();" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 text-[13px]"><i class="fa-solid fa-crop-simple mr-1"></i> Crop</button>
+            <button onclick="closeModal(); savePreviewPopupPhoto();" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-[13px]"><i class="fa-solid fa-check mr-1"></i> Save</button>
+            <button onclick="closeModal(); tempPreviewPhotoData = null; openPreviewPhotoActionModal();" class="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 text-[13px]"><i class="fa-solid fa-trash mr-1"></i> Delete</button>
+        `;
+    };
+
+    window.openPreviewCropModal = function() {
+        if (!tempPreviewPhotoData) return;
+        const modal = document.getElementById('crop-modal');
+        const cropImg = document.getElementById('crop-modal-img');
+
+        cropImg.src = tempPreviewPhotoData;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        if (window.cropperInstance) { window.cropperInstance.destroy(); }
+        window.cropperInstance = new Cropper(cropImg, {
+            aspectRatio: 3 / 4,
+            viewMode: 1,
+            autoCropArea: 1,
+        });
+
+        const originalApplyCrop = window.applyCrop;
+        const originalCloseCropModal = window.closeCropModal;
+
+        window.applyCrop = function() {
+            if (!window.cropperInstance) return;
+            const canvas = window.cropperInstance.getCroppedCanvas({ width: 600, height: 800 });
+            if (canvas) {
+                tempPreviewPhotoData = canvas.toDataURL('image/jpeg', 0.6);
+            }
+            // Restore original functions
+            window.applyCrop = originalApplyCrop;
+            window.closeCropModal = originalCloseCropModal;
+            originalCloseCropModal();
+            showPreviewPhotoOptionsModal();
+        };
+
+        window.closeCropModal = function() {
+            // Restore original functions
+            window.applyCrop = originalApplyCrop;
+            window.closeCropModal = originalCloseCropModal;
+            originalCloseCropModal();
+            showPreviewPhotoOptionsModal();
+        };
+    };
+
+    window.savePreviewPopupPhoto = function() {
+        if (!previewRecord || !tempPreviewPhotoData) return;
+        
+        previewRecord.docUrl = tempPreviewPhotoData;
+        previewRecord.photoData = tempPreviewPhotoData;
+        previewRecord._displayPhotoSrc = tempPreviewPhotoData;
+        
+        // Move to unverified section
+        previewRecord.verified = false;
+        previewRecord.status = 'Pending';
+        previewRecord.returned = false;
+        
+        storeRecordInDb(previewRecord);
+        if (typeof queueServerDraftSync === 'function') queueServerDraftSync();
+        
+        showToast('Photo saved. Card moved to Unverified.');
+        
+        tempPreviewPhotoData = null;
+        setBlankRecordMode('none');
+        renderCurrentRecordsPage();
+    };
     </script>
 
 </body>
