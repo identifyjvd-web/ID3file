@@ -1311,7 +1311,7 @@
                 if (typeof closeSchoolConfig === 'function') closeSchoolConfig();
                 if (typeof closeAllMenus === 'function') closeAllMenus();
                 
-                window.location.replace('Login_Panel.html' + (isAuto ? '?msg=session_expired' : ''));
+                window.location.replace('Login_Panel.html?msg=' + (isAuto ? 'session_expired' : 'logout'));
             }
             function confirmLogout() {
                 showModal('logout', 'Logout?', 'Kya aap admin panel se logout karna chahte hain?', () => {

@@ -441,7 +441,8 @@
 
                 // Check for session expired parameter
                 const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('msg') === 'session_expired') {
+                const msg = urlParams.get('msg');
+                if (msg === 'session_expired') {
                     const errorEl = document.getElementById('login-error');
                     if (errorEl) {
                         errorEl.innerText = 'Session expired due to inactivity.';
@@ -449,13 +450,18 @@
                     }
                 }
 
-                // Hide splash screen and show login form after a slight delay
+                // Hide splash screen after delay, or instantly if logged out / session expired
                 const splash = document.getElementById('initial-splash-screen');
                 if (splash) {
-                    setTimeout(() => {
+                    if (msg === 'logout' || msg === 'session_expired') {
                         splash.style.opacity = '0';
-                        setTimeout(() => splash.remove(), 500);
-                    }, 2500);
+                        splash.remove();
+                    } else {
+                        setTimeout(() => {
+                            splash.style.opacity = '0';
+                            setTimeout(() => splash.remove(), 500);
+                        }, 2500);
+                    }
                 }
 
                 if (typeof lucide !== 'undefined') lucide.createIcons();
