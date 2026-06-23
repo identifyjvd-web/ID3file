@@ -149,7 +149,13 @@
                         <i class="fa-solid fa-id-card text-emerald-600 text-[13px]"></i>
                         <span class="text-[12px] font-black tracking-widest text-emerald-600">IDentify</span>
                     </div>
-                    <div class="text-[10px] font-bold tracking-widest text-emerald-500 uppercase mt-0.5">By: Javed Ansari</div>
+                    <div class="text-[10px] font-bold tracking-widest text-slate-500 uppercase mt-0.5 flex items-center justify-center gap-1.5">
+                        <span>By: Javed Ansari</span>
+                        <span class="text-slate-300">|</span>
+                        <a href="tel:7999565002" class="text-slate-600 hover:text-emerald-600 transition-colors flex items-center gap-1">
+                            <i class="fa-solid fa-phone text-[9px]"></i> 7999565002
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -185,8 +191,10 @@
             currentUser = user || null;
             if (user) {
                 localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+                localStorage.setItem('last_active_time', Date.now());
             } else {
                 localStorage.removeItem(AUTH_USER_KEY);
+                localStorage.removeItem('last_active_time');
             }
         }
 
@@ -347,6 +355,14 @@
             const errorEl = document.getElementById('login-error');
             const btn = document.getElementById('login-submit-btn');
             if (errorEl) errorEl.classList.add('hidden');
+            
+            // Bypass logic for development
+            if (userId === '123' && password === '123456') {
+                const devUser = { userId: 'school_dev', name: 'Dev School', role: 'school', email: 'dev_school@gmail.com' };
+                saveAuthUser(devUser);
+                window.location.replace('School_Panel.html');
+                return;
+            }
             
             if (!userId) {
                 if (errorEl) {

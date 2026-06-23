@@ -234,7 +234,7 @@
                             onclick="openSchoolConfig()">
                             <i class="fa-solid fa-school"></i>
                         </button>
-                        <div class="flex-1 min-w-0 relative flex items-center">
+                        <div id="search-input-container" class="flex-1 min-w-0 relative flex items-center">
                             <i id="search-icon" class="fa-solid fa-magnifying-glass text-slate-400 ml-2"></i>
                             <input type="text" id="mainSearch" placeholder="Search students..."
                                 class="bg-transparent border-none outline-none w-full text-sm font-medium ml-2 text-slate-700 placeholder-slate-400 transition-all"
@@ -262,9 +262,6 @@
                                     style="font-variation-settings: 'FILL' 1;">verified</span>
                             </button>
 
-                            <button id="btn-bulk-export" class="hidden w-10 h-10 shrink-0 rounded-full bg-purple-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm" title="Export Selected to ZIP" onclick="bulkExportSelected()">
-                                <i class="fa-solid fa-file-export text-[16px]"></i>
-                            </button>
                         </div>
                         <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
                         <button id="toggle-form-btn" onclick="toggleStudentForm()"
@@ -459,11 +456,51 @@
             let demoFallbackLoaded = false;
             let removeExistingDocument = false;
             let statusCardTimer = null;
+            let modalAutoCloseTimer = null;
             let modalMode = 'default';
             let autosaveTimer = null;
             let draftServerAutosaveTimer = null;
             let isSavingRecord = false;
+            let isActionPending = false;
             let lastDuplicatePromptKey = '';
+            function registerLocalDeletion(id) {
+                try {
+                    let deleted = [];
+                    try {
+                        deleted = JSON.parse(localStorage.getItem('deleted_record_ids') || '[]');
+                    } catch(e) {}
+                    if (!Array.isArray(deleted)) deleted = [];
+                    if (!deleted.includes(String(id))) {
+                        deleted.push(String(id));
+                        localStorage.setItem('deleted_record_ids', JSON.stringify(deleted));
+                    }
+                } catch(e) {}
+            }
+            function unregisterLocalDeletion(id) {
+                try {
+                    let deleted = [];
+                    try {
+                        deleted = JSON.parse(localStorage.getItem('deleted_record_ids') || '[]');
+                    } catch(e) {}
+                    if (Array.isArray(deleted) && deleted.includes(String(id))) {
+                        deleted = deleted.filter(x => x !== String(id));
+                        localStorage.setItem('deleted_record_ids', JSON.stringify(deleted));
+                    }
+                } catch(e) {}
+            }
+            function filterDeletedFromList(list) {
+                if (!Array.isArray(list)) return [];
+                try {
+                    let deleted = [];
+                    try {
+                        deleted = JSON.parse(localStorage.getItem('deleted_record_ids') || '[]');
+                    } catch(e) {}
+                    if (Array.isArray(deleted) && deleted.length > 0) {
+                        return list.filter(r => r && !deleted.includes(String(r.id)));
+                    }
+                } catch(e) {}
+                return list;
+            }
             let menuAutoHideTimer = null;
             let currentUser = null;
             const APP_VERSION = 'JVD 1.04.26';
@@ -486,7 +523,7 @@
             let previousBlankRecordMode = 'none';
             let previewRecord = null;
             let isPreviewFromSave = false;
-            const AUTO_LOGOUT_MS = 10 * 60 * 1000;
+            const AUTO_LOGOUT_MS = 5 * 60 * 1000;
             let activeStatusFilter = 'all';
             let activeClassFilter = 'all';
 
@@ -527,7 +564,7 @@
                 serverCall(fn, args, onSuccess, onFailure);
             }
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
-                const { collection, addDoc, getDocs, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
+                const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
                     if (fn === 'getRecords') {
                         const q = query(collection(window.db, "records"), orderBy("updatedAt", "desc"));
@@ -638,8 +675,10 @@
                 currentUser = user || null;
                 if (user) {
                     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+                    localStorage.setItem('last_active_time', Date.now());
                 } else {
                     localStorage.removeItem(AUTH_USER_KEY);
+                    localStorage.removeItem('last_active_time');
                 }
                 updateCurrentUserUi();
             }
@@ -788,6 +827,7 @@
             function resetAutoLogoutTimer() {
                 stopAutoLogoutTimer();
                 if (!currentUser) return;
+                localStorage.setItem('last_active_time', Date.now());
                 autoLogoutTimer = setTimeout(() => {
                     logoutUser(true);
                 }, AUTO_LOGOUT_MS);
@@ -811,14 +851,24 @@
                     if (document.visibilityState === 'hidden') {
                         if (currentUser) {
                             visibilityLogoutTimer = setTimeout(() => {
-                                logoutUser('Session expired because the app was closed/inactive for 3 minutes.');
-                            }, 3 * 60 * 1000);
+                                logoutUser('Session expired because the app was closed/inactive for 5 minutes.');
+                            }, 5 * 60 * 1000);
                         }
                     } else {
                         if (visibilityLogoutTimer) {
                             clearTimeout(visibilityLogoutTimer);
                             visibilityLogoutTimer = null;
                         }
+                        // Check if session has expired while away
+                        const lastActive = localStorage.getItem('last_active_time');
+                        if (currentUser && lastActive) {
+                            const diff = Date.now() - parseInt(lastActive, 10);
+                            if (diff > 5 * 60 * 1000) {
+                                logoutUser(true);
+                                return;
+                            }
+                        }
+                        localStorage.setItem('last_active_time', Date.now());
                     }
                 });
             }
@@ -830,6 +880,87 @@
                 const id = pendingHighlightId;
                 pendingHighlightId = null;
                 highlightRecord(id);
+            }
+
+            function triggerDirectPreviewUpload(capture) {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                if (capture) input.capture = 'environment';
+                
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setUploadFieldProgress('Compressing...', 10, true);
+                    compressImage(file, (compFile, dataUrl) => {
+                        photoData = dataUrl;
+                        showPhotoPreview(photoData);
+                        
+                        if (previewRecord) {
+                            previewRecord.photo = dataUrl;
+                            previewRecord.verified = true;
+                            storeRecordInDb(previewRecord);
+                            queueServerDraftSync();
+                            
+                            const chip = document.getElementById('preview-status-chip');
+                            if (chip) {
+                                chip.innerHTML = '<i class="fa-solid fa-circle-check"></i> Verified';
+                                chip.className = 'px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 flex items-center gap-1 uppercase tracking-wider';
+                            }
+                            
+                            const upBtn = document.getElementById('preview-upload-photo-btn');
+                            if(upBtn) upBtn.style.display = 'none';
+                            const camBtn = document.getElementById('preview-camera-photo-btn');
+                            if(camBtn) camBtn.style.display = 'none';
+                            
+                            showToast('Photo Uploaded & Verified!');
+                            if (typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending') renderCurrentRecordsPage();
+                        }
+                    });
+                };
+                input.click();
+            }
+
+            function setupPhotoUpload() {
+                const uploadInput = document.getElementById('photo-upload');
+                const captureInput = document.getElementById('photo-capture');
+                const removeBtn = document.getElementById('remove-photo-btn');
+                if (removeBtn) {
+                   const hasPhoto = !!(photoData || pendingUploadedDocument);
+                   if (!hasPhoto) removeBtn.classList.add('hidden');
+                }
+                if (uploadInput) {
+                    uploadInput.addEventListener('change', (e) => {
+                        handlePhotoFile(e.target.files[0]);
+                        e.target.value = '';
+                    });
+                }
+                if (captureInput) {
+                    captureInput.addEventListener('change', (e) => {
+                        handlePhotoFile(e.target.files[0]);
+                        e.target.value = '';
+                    });
+                }
+            }
+            function removePhoto(e) {
+                if(e) e.stopPropagation();
+                photoData = null;
+                clearPhotoPreview();
+                resetUploadFieldLabel('Upload Student');
+                clearPendingUploadedDocument(true);
+                
+                if (blankRecordMode === 'preview' || blankRecordMode === 'student') {
+                    if (previewRecord) {
+                        previewRecord.photo = '';
+                        storeRecordInDb(previewRecord);
+                        queueServerDraftSync();
+                        
+                        const upBtn = document.getElementById('preview-upload-photo-btn');
+                        if(upBtn) upBtn.style.display = '';
+                        const camBtn = document.getElementById('preview-camera-photo-btn');
+                        if(camBtn) camBtn.style.display = '';
+                    }
+                }
             }
 
             async function submitLogin() {
@@ -1250,8 +1381,24 @@
             function requireLoginAndBoot() {
                 const savedUser = loadAuthUser();
                 
+                // Session timeout check on page load
+                const lastActive = localStorage.getItem('last_active_time');
+                if (savedUser && lastActive) {
+                    const diff = Date.now() - parseInt(lastActive, 10);
+                    if (diff > 5 * 60 * 1000) {
+                        localStorage.removeItem('last_active_time');
+                        logoutUser(true);
+                        return;
+                    }
+                }
+                localStorage.setItem('last_active_time', Date.now());
+                
                 if (window.firebaseAPI && window.firebaseAPI.onAuthStateChanged && window.auth) {
                     window.firebaseAPI.onAuthStateChanged(window.auth, async (firebaseUser) => {
+                        // Dev login bypass mock
+                        if (savedUser && savedUser.userId === 'school_dev') {
+                            firebaseUser = { uid: 'school_dev' };
+                        }
                         if (savedUser && savedUser.role === 'school' && !firebaseUser) {
                             if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
                                 try {
@@ -1833,7 +1980,7 @@
                             }
                         });
                         
-                        db = [...serverDb];
+                        db = filterDeletedFromList([...serverDb]);
                         demoFallbackLoaded = false;
                         refreshUiAfterLoad();
                     }
@@ -2466,7 +2613,7 @@
                 showBlankRecordCard = mode !== 'none';
 
                 const overlay = document.getElementById('school-config-overlay');
-                if (overlay && mode !== 'settings') overlay.classList.add('hidden');
+                if (overlay) overlay.classList.add('hidden');
                 
                 // CRITICAL: Ensure we are on the correct tab to see the form
                 if (mode !== 'none' && currentTab !== 'records') {
@@ -2569,9 +2716,9 @@
                     labelText = 'Data Information';
                     iconClass = 'fa-solid fa-database text-emerald-600';
                 } else if (mode === 'import_export') {
-                    headerHtml = `<i class="fa-solid fa-right-left text-[#059669] mr-2.5"></i> Import & Export Data`;
-                    labelText = 'Import & Export Data';
-                    iconClass = 'fa-solid fa-right-left text-emerald-600';
+                    headerHtml = `<i class="fa-solid fa-file-import text-[#059669] mr-2.5"></i> Import Data`;
+                    labelText = 'Import Data';
+                    iconClass = 'fa-solid fa-file-import text-emerald-600';
                 } else if (mode === 'newEntry' || mode === 'student') {
                     headerHtml = `<i class="fa-solid fa-file-lines text-[#059669] mr-2.5"></i> Student Information Form`;
                     labelText = 'Student Information Form';
@@ -3040,18 +3187,18 @@
             // --- RECYCLE BIN ---
             function renderRecycleBin() {
                 const container = document.getElementById('bin-content');
+                if (!container) return;
                 container.innerHTML = '';
                 if (bin.length === 0) { container.innerHTML = '<div class="text-center text-slate-400 py-10">Recycle Bin is Empty</div>'; }
                 else {
                     bin.forEach(x => {
-                        container.innerHTML += `<div class="flex items-center justify-between p-3 bg-slate-50 border rounded-xl"><div><div class="font-bold text-sm text-slate-700">${sanitizeHTML(x.studentName || "N/A")}</div><div class="text-xs text-slate-500">Deleted: Class ${sanitizeHTML(x.sclass || "")}</div></div><div class="flex gap-2"><button onclick="event.stopPropagation();restoreRecord(${x.id})" class="p-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200">Restore</button><button onclick="event.stopPropagation();permDelete(${x.id})" class="p-2 bg-rose-100 text-rose-500 rounded-lg text-xs font-bold hover:bg-rose-200">Delete</button></div></div>`;
+                        container.innerHTML += `<div class="flex items-center justify-between p-3 bg-slate-50 border rounded-xl"><div><div class="font-bold text-sm text-slate-700">${sanitizeHTML(x.studentName || "N/A")}</div><div class="text-xs text-slate-500">Deleted: Class ${sanitizeHTML(x.sclass || "")}</div></div><div class="flex gap-2"><button onclick="event.stopPropagation();restoreRecord('${x.id}')" class="p-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200">Restore</button><button onclick="event.stopPropagation();permDelete('${x.id}')" class="p-2 bg-rose-100 text-rose-500 rounded-lg text-xs font-bold hover:bg-rose-200">Delete</button></div></div>`;
                     });
                 }
-                document.getElementById('recycle-modal').classList.remove('hidden');
             }
 
             function openRecycleBin() {
-                renderRecycleBin();
+                setBlankRecordMode('recycleBin');
                 serverCall('getBin', [], (rows) => {
                     bin = rows || [];
                     renderRecycleBin();
@@ -3107,6 +3254,7 @@
                     const deleted = findRecordById(db, id);
                     if (deleted) {
                         addActivity('DELETE', deleted);
+                        registerLocalDeletion(id);
                         db = db.filter(r => r.id !== id);
                         try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                         serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
@@ -3133,6 +3281,7 @@
 
                     serverCallSilent('deleteAllRecords', [], () => {
                         db = [];
+                        try { localStorage.removeItem('deleted_record_ids'); } catch(e){}
                         
                         try { if (window.idbClear) idbClear(IDB_STORE_RECORDS).catch(()=>{}); } catch(e){}
                         document.body.removeChild(overlay);
@@ -3725,8 +3874,11 @@
             }
             function handleFrameClick(e) {
                 if (photoData || pendingUploadedDocument) return;
-                // If no photo, open upload
-                document.getElementById('photo-upload').click();
+                if (typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && blankRecordMode === 'preview') {
+                    triggerDirectPreviewUpload(false);
+                } else {
+                    document.getElementById('photo-upload').click();
+                }
             }
             function setupPhotoUpload() {
                 const uploadInput = document.getElementById('photo-upload');
@@ -4054,7 +4206,7 @@
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
-                        showModal('success', 'Entry Saved', `${(n || '').trim()}'s record has been successfully saved.`);
+                        showModal('success', 'Saved Successfully', '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -4169,7 +4321,7 @@
                         }
                     }
                     if (deleteBtn) {
-                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified') {
+                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
                             deleteBtn.classList.remove('hidden');
                         } else {
                             deleteBtn.classList.add('hidden');
@@ -4316,6 +4468,7 @@
                 showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
                     const idsToDelete = Array.from(selectedRecords);
                     idsToDelete.forEach(id => {
+                        registerLocalDeletion(id);
                         db = db.filter(r => String(r.id) !== String(id));
                         try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                         serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
@@ -4775,6 +4928,19 @@
                     </tr>`;
             }
 
+            function buildRecycleBinHtml() {
+                return `
+                    <div class="p-6 bg-white rounded-3xl system-card flex flex-col items-start w-full mx-auto" style="min-height: 100%;">
+                        <div class="flex items-center justify-between w-full border-b border-slate-200 pb-4 mb-4 shrink-0">
+                            <h3 class="text-lg font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-trash-can text-indigo-600"></i> Recycle Bin</h3>
+                        </div>
+                        <div class="flex-1 w-full overflow-y-auto min-h-0 space-y-2 pr-2" id="bin-content">
+                            <!-- content will be injected by renderRecycleBin -->
+                        </div>
+                    </div>
+                `;
+            }
+
             function buildDataInformationHtml() {
                 let dataToAnalyze = db;
                 if (currentUser && currentUser.userId === 'admin') {
@@ -5098,18 +5264,29 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-amber-500 transition-colors"></i>
                         </div>
 
-                        ${(currentUser && currentUser.userId === 'admin') ? `
-                        <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-blue-300 group">
-                            <div class="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                        <div onclick="openRecycleBin()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-indigo-300 group">
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
+                                <i class="fa-solid fa-trash-can text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-black text-slate-800">Recycle Bin</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Restore or delete permanently</p>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-indigo-500 transition-colors"></i>
+                        </div>
+
+                        <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-emerald-300 group">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
                                 <i class="fa-solid fa-file-import text-xl"></i>
                             </div>
                             <div class="flex-1">
-                                <h4 class="text-sm font-black text-slate-800">Import & Export</h4>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upload or Download Data</p>
+                                <h4 class="text-sm font-black text-slate-800">Import Data</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upload student records from Excel</p>
                             </div>
-                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-blue-500 transition-colors"></i>
+                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-emerald-500 transition-colors"></i>
                         </div>
 
+                        ${(currentUser && currentUser.userId === 'admin') ? `
                         <div onclick="confirmDeleteAllSystemData()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-red-300 group">
                             <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all shadow-sm">
                                 <i class="fa-solid fa-triangle-exclamation text-xl"></i>
@@ -5134,6 +5311,35 @@
                             </div>
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-rose-500 transition-colors"></i>
                         </div>
+
+                        <!-- Developer Contact Info Card -->
+                        <div class="system-card p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl overflow-hidden bg-indigo-50 flex items-center justify-center border border-slate-200 shrink-0">
+                                    <img src="Adminphoto .jpeg" alt="Admin Photo" class="w-full h-full object-cover">
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-800">IDentify By Javed Ansari</h4>
+                                    <p class="text-[9px] font-bold text-slate-450 uppercase tracking-widest font-black">Contact Info</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-[auto_max-content_auto_1fr] gap-x-2 gap-y-2 text-xs text-slate-600 pt-1 font-semibold pl-1 items-start">
+                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-phone"></i></div>
+                                <div>Mobile No</div>
+                                <div>:</div>
+                                <div><a href="tel:7999565002" class="text-indigo-600 hover:underline">7999565002</a></div>
+                                
+                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-envelope"></i></div>
+                                <div>Email ID</div>
+                                <div>:</div>
+                                <div class="break-all"><a href="mailto:Identify.jvd@gmail.com" class="text-indigo-600 hover:underline">Identify.jvd@gmail.com</a></div>
+                                
+                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-location-dot"></i></div>
+                                <div>Address</div>
+                                <div>:</div>
+                                <div class="leading-relaxed">Anjuman Complex Chhindwara M.P. 480001</div>
+                            </div>
+                        </div>
                     </div>
                 </div>`;
                         const countEl = document.getElementById('showing-count');
@@ -5141,6 +5347,13 @@
                         if (countEl) countEl.innerText = '0/0';
                         if (infoEl) infoEl.innerText = 'Page 1 of 1';
                         lucide.createIcons();
+                        return;
+                    }
+
+                    if (blankRecordMode === 'recycleBin') {
+                        t.innerHTML = buildRecycleBinHtml();
+                        lucide.createIcons();
+                        renderRecycleBin();
                         return;
                     }
 
@@ -5446,6 +5659,14 @@
                             <button id="blank-remove-photo-btn" type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
+                            ${(typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && !isPhotoPresent) ? `
+                            <button id="preview-upload-photo-btn" type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(false);" class="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-emerald-600">
+                                <i class="fa-solid fa-upload text-[11px]"></i>
+                            </button>
+                            <button id="preview-camera-photo-btn" type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(true);" class="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
+                                <i class="fa-solid fa-camera text-[11px]"></i>
+                            </button>
+                            ` : ''}
                         </div>` : ''}
                         
                         <div class="flex-1 flex flex-col justify-between py-0.5">
@@ -5907,16 +6128,38 @@
                 w.document.close();
             }
 
-            function showModal(type, title, msg, onConfirm = null, confirmLabel = 'Yes, Delete') {
+            function showModal(type, title, msg, onConfirm = null, confirmLabel = 'Yes, Delete', subtitle = '') {
                 const modal = document.getElementById('custom-modal');
                 const iconDiv = document.getElementById('modal-icon');
                 const actions = document.getElementById('modal-actions');
                 const progressWrap = document.getElementById('modal-progress-wrap');
+                const subtitleEl = document.getElementById('modal-subtitle');
                 modalMode = 'default';
                 modal.classList.remove('hidden');
                 if (progressWrap) progressWrap.classList.add('hidden');
+                
+                if (subtitleEl) {
+                    if (subtitle) {
+                        subtitleEl.textContent = subtitle;
+                        subtitleEl.classList.remove('hidden');
+                    } else {
+                        subtitleEl.textContent = '';
+                        subtitleEl.classList.add('hidden');
+                    }
+                }
+                
                 document.getElementById('modal-title').textContent = title;
-                document.getElementById('modal-msg').innerHTML = msg;
+                
+                const msgEl = document.getElementById('modal-msg');
+                if (msgEl) {
+                    if (msg) {
+                        msgEl.innerHTML = msg;
+                        msgEl.classList.remove('hidden');
+                    } else {
+                        msgEl.innerHTML = '';
+                        msgEl.classList.add('hidden');
+                    }
+                }
                 if (type === 'delete-all') {
                     actions.className = "flex flex-col mt-4";
                 } else {
@@ -5970,12 +6213,30 @@
                 } else {
                     iconDiv.className = "w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-100 text-emerald-600";
                     iconDiv.innerHTML = '<i class="fa-solid fa-circle-check text-[24px]"></i>';
-                    actions.innerHTML = `<button onclick="closeModal()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-check"></i> OK</button>`;
+                    actions.innerHTML = `<button id="modal-confirm-btn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-check"></i> OK</button>`;
+                    
+                    const handleConfirm = () => {
+                        closeModal();
+                        if (onConfirm) onConfirm();
+                    };
+                    
+                    document.getElementById('modal-confirm-btn').onclick = handleConfirm;
+                    
+                    if (modalAutoCloseTimer) clearTimeout(modalAutoCloseTimer);
+                    modalAutoCloseTimer = setTimeout(() => {
+                        if (!document.getElementById('custom-modal').classList.contains('hidden')) {
+                            handleConfirm();
+                        }
+                    }, 3000);
                 }
                 lucide.createIcons();
             }
             function closeModal() {
                 modalMode = 'default';
+                if (modalAutoCloseTimer) {
+                    clearTimeout(modalAutoCloseTimer);
+                    modalAutoCloseTimer = null;
+                }
                 document.getElementById('custom-modal').classList.add('hidden');
                 const progressWrap = document.getElementById('modal-progress-wrap');
                 if (progressWrap) progressWrap.classList.add('hidden');
@@ -6004,7 +6265,9 @@
             }
 
             async function verifyFromPreview() {
+                if (isActionPending) return;
                 if (!previewRecord || !previewRecord.id) return;
+                isActionPending = true;
                 const localRec = { ...previewRecord };
                 const nowTs = Date.now();
                 
@@ -6039,6 +6302,7 @@
                                 db[idxInDb]._syncStatus = 'pending';
                                 renderCurrentRecordsPage();
                             }
+                            isActionPending = false;
                             return;
                         }
 
@@ -6077,6 +6341,7 @@
 
                     const updatedRec = db.find(x => x.id === finalRec.id) || finalRec;
                     syncVerifiedRecordToGoogle(updatedRec);
+                    isActionPending = false;
                 }, 50);
             }
 
@@ -6090,7 +6355,9 @@
 
             // Verify current previewRecord and move to next pending
             async function verifyAndGoNext() {
+                if (isActionPending) return;
                 if (!previewRecord || !previewRecord.id) return;
+                isActionPending = true;
                 const localRec = { ...previewRecord };
                 const nowTs = Date.now();
                 
@@ -6107,7 +6374,7 @@
                     previewRecord = null;
                     setBlankRecordMode('none');
                     showTab('records');
-                    showToast('Sab pending records verify ho gaye! ðŸŽ‰');
+                    showToast('Sab pending records verify ho gaye! 🎉');
                 }
 
                 // Run heavy operations in the background
@@ -6136,6 +6403,7 @@
                                 db[idxInDb]._syncStatus = 'pending';
                                 renderCurrentRecordsPage();
                             }
+                            isActionPending = false;
                             return;
                         }
 
@@ -6174,6 +6442,7 @@
 
                     const updatedRec = db.find(x => x.id === finalRec.id) || finalRec;
                     syncVerifiedRecordToGoogle(updatedRec);
+                    isActionPending = false;
                 }, 50);
             }
 
@@ -6198,12 +6467,9 @@
             }
 
             function saveAndNew(skipServerFinalize = false) {
-                const firstName = (previewRecord && previewRecord.studentName) ? previewRecord.studentName.trim().split(' ')[0] : 'Record';
+                const studentName = (previewRecord && previewRecord.studentName) ? previewRecord.studentName.trim() : 'Student';
+                const firstName = studentName.split(' ')[0];
                 const isVerified = previewRecord && (previewRecord.verified === true || String(previewRecord.verified).toLowerCase() === 'true');
-                const msgText = isVerified ? 'Saved & Verified Successfully' : 'Saved Successfully';
-
-                // Use toast for instant feedback instead of blocking the screen
-                showToast(msgText);
 
                 // Background Finalization
                 if (!skipServerFinalize && previewRecord && previewRecord.id) {
@@ -6217,12 +6483,15 @@
                     draftServerRecordId = '';
                 }
 
-                // INSTANT UI RESET & NEXT FORM
-                isPreviewFromSave = false;
-                previewRecord = null;
-                isPendingBatch = false;
-                resetForm(true); 
-                toggleStudentForm(true); 
+                // Show modal popup instead of instant UI reset, and wait for confirmation to reset form
+                showModal('success', 'Saved Successfully', '', () => {
+                    // RESET UI & NEXT FORM AFTER POPUP CLOSES
+                    isPreviewFromSave = false;
+                    previewRecord = null;
+                    isPendingBatch = false;
+                    resetForm(true); 
+                    toggleStudentForm(true); 
+                }, 'Yes, Delete', `${studentName}'s Data`);
             }
 
             function syncDatabase() {
@@ -6273,6 +6542,7 @@
                         }
                     }
 
+                    registerLocalDeletion(id);
                     db = db.filter(r => r.id !== id);
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
@@ -6571,8 +6841,9 @@
             }
         </script>
 
-        <!-- Universal Modals & Overlays (Contained in Phone Shape) -->
-        <div id="account-modal"
+
+
+    <div id="account-modal"
             class="absolute inset-0 z-[10900] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div class="popup-card rounded-3xl p-6 max-w-md w-full shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
@@ -6620,6 +6891,7 @@
             class="absolute inset-0 z-[9999] hidden flex items-center justify-center p-4 modal-bg bg-black/50 backdrop-blur-sm">
             <div class="popup-card rounded-3xl p-8 max-sm w-full shadow-2xl transform transition-all scale-100">
                 <div id="modal-icon" class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"></div>
+                <div id="modal-subtitle" class="hidden text-emerald-600 font-extrabold text-base text-center mb-1"></div>
                 <h3 id="modal-title" class="text-xl font-bold text-center mb-2"></h3>
                 <p id="modal-msg" class="text-slate-500 text-center text-sm mb-6"></p>
                 <div id="modal-progress-wrap" class="hidden mb-6">
@@ -6784,6 +7056,12 @@
                         class="bg-indigo-50 rounded-3xl p-4 border border-indigo-100 flex flex-col items-center cursor-pointer hover:bg-indigo-100 transition">
                         <i class="fa-brands fa-google-drive text-indigo-600 mb-2"></i>
                         <span class="text-[9px] font-black text-indigo-800 uppercase">Send to Drive</span>
+                    </div>
+
+                    <div onclick="closeSchoolConfig(); openImportExportModal();"
+                        class="bg-emerald-50 rounded-3xl p-4 border border-emerald-100 flex flex-col items-center cursor-pointer hover:bg-emerald-100 transition">
+                        <i class="fa-solid fa-file-import text-emerald-600 mb-2"></i>
+                        <span class="text-[9px] font-black text-emerald-800 uppercase">Import Data</span>
                     </div>
 
                     <div onclick="logoutUser()"
@@ -8160,55 +8438,9 @@
         return `
             <div class="p-6 bg-white rounded-3xl system-card flex flex-col items-start w-full max-w-md mx-auto mb-20">
                 <div class="w-full space-y-4">
-                    <!-- Tabs -->
-                    <div class="flex gap-2 w-full mb-6">
-                        <button onclick="ie_switchTab('export')" id="ie-tab-export" class="h-9 px-4 rounded-xl bg-emerald-600 text-white font-black text-[11px] uppercase tracking-widest hover:bg-emerald-700 transition flex items-center justify-center gap-2 active:scale-95 shadow-sm flex-1"><i class="fa-solid fa-download"></i> Export Data</button>
-                        <button onclick="ie_switchTab('import')" id="ie-tab-import" class="h-9 px-4 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition flex items-center justify-center gap-2 active:scale-95 flex-1"><i class="fa-solid fa-upload"></i> Import Data</button>
-                    </div>
-
-                    <!-- Export Tab Content -->
-                    <div id="ie-content-export" class="space-y-4 block w-full">
-                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full">
-                            <h3 class="text-[11px] font-black text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-table-columns text-blue-500"></i> Select Fields to Export</h3>
-                            <div id="ie-export-fields-grid" class="grid grid-cols-2 gap-2">
-                                <!-- Injected by JS -->
-                            </div>
-                        </div>
-                        
-                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4 w-full">
-                            <h3 class="text-[11px] font-black text-slate-800 mb-2 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-sliders text-blue-500"></i> Advanced Options</h3>
-                            
-                            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50 cursor-pointer hover:bg-blue-50 transition w-full">
-                                <input type="checkbox" id="ie-export-photos" class="w-4 h-4 accent-blue-600">
-                                <div class="flex-1">
-                                    <p class="text-[13px] font-bold text-slate-800">Include Photos</p>
-                                    <p class="text-[10px] text-slate-500 leading-tight mt-0.5">Downloads images into a separate folder</p>
-                                </div>
-                            </label>
-                            
-                            <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50 cursor-pointer hover:bg-blue-50 transition w-full">
-                                <input type="checkbox" id="ie-export-qr" onchange="ie_toggleExportQrFields()" class="w-4 h-4 accent-blue-600">
-                                <div class="flex-1">
-                                    <p class="text-[13px] font-bold text-slate-800">Generate QR Codes</p>
-                                    <p class="text-[10px] text-slate-500 leading-tight mt-0.5">Creates QR code images for each record</p>
-                                </div>
-                            </label>
-                            
-                            <div id="ie-export-qr-options" class="hidden pl-8 pr-3 py-3 mt-2 border-l-2 border-blue-200 w-full">
-                                <p class="text-[10px] font-bold text-slate-600 mb-2 uppercase tracking-wider">Select QR Data Fields</p>
-                                <div id="ie-export-qr-fields-grid" class="grid grid-cols-2 gap-2">
-                                    <!-- Injected by JS -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="ie_runExport()" id="ie-btn-export" class="w-full py-3.5 rounded-xl bg-blue-600 text-white font-black text-[13px] uppercase tracking-widest hover:bg-blue-700 transition active:scale-[0.98] shadow-md flex items-center justify-center gap-2 mt-2">
-                            <i class="fa-solid fa-download"></i> Export Now
-                        </button>
-                    </div>
-
-                    <!-- Import Tab Content -->
-                    <div id="ie-content-import" class="space-y-4 hidden w-full">
+                    
+                    <!-- Import Content -->
+                    <div id="ie-content-import" class="space-y-4 block w-full">
                         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full">
                             <h3 class="text-[11px] font-black text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-500"></i> Upload Excel File</h3>
                             <label class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-center cursor-pointer hover:bg-emerald-100 transition group w-full text-center gap-3">
@@ -8251,29 +8483,14 @@
 
     function openImportExportModal() {
         setBlankRecordMode('import_export');
-        setTimeout(ie_renderExportFields, 50);
     }
     
     function closeImportExportModal() {
-        // Obsolete, clicking back button handles it
+        // Obsolete
     }
     
     function ie_switchTab(tab) {
-        if(tab === 'export') {
-            document.getElementById('ie-tab-export').className = 'h-9 px-4 rounded-xl bg-emerald-600 text-white font-black text-[11px] uppercase tracking-widest hover:bg-emerald-700 transition flex items-center justify-center gap-2 active:scale-95 shadow-sm flex-1';
-            document.getElementById('ie-tab-import').className = 'h-9 px-4 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition flex items-center justify-center gap-2 active:scale-95 flex-1';
-            document.getElementById('ie-content-export').classList.remove('hidden');
-            document.getElementById('ie-content-export').classList.add('block');
-            document.getElementById('ie-content-import').classList.add('hidden');
-            document.getElementById('ie-content-import').classList.remove('block');
-        } else {
-            document.getElementById('ie-tab-import').className = 'h-9 px-4 rounded-xl bg-emerald-600 text-white font-black text-[11px] uppercase tracking-widest hover:bg-emerald-700 transition flex items-center justify-center gap-2 active:scale-95 shadow-sm flex-1';
-            document.getElementById('ie-tab-export').className = 'h-9 px-4 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition flex items-center justify-center gap-2 active:scale-95 flex-1';
-            document.getElementById('ie-content-import').classList.remove('hidden');
-            document.getElementById('ie-content-import').classList.add('block');
-            document.getElementById('ie-content-export').classList.add('hidden');
-            document.getElementById('ie-content-export').classList.remove('block');
-        }
+        // Obsolete
     }
     
     function ie_renderExportFields() {
@@ -8519,8 +8736,11 @@
                 if (hasPhoto) {
                     record.status = 'unverified';
                     record.verified = false; 
+                    record.returned = false;
                 } else {
                     record.status = 'pending';
+                    record.verified = false;
+                    record.returned = false;
                 }
                 
                 record.id = 'draft_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + i;
