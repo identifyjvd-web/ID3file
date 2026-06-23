@@ -8490,7 +8490,7 @@
             });
             
             let importCount = 0;
-            const schoolId = currentUser ? currentUser.userId : 'anonymous';
+            const schoolId = (schoolConfig && schoolConfig.loginId) ? schoolConfig.loginId : (currentUser ? currentUser.userId : 'anonymous');
             
             for (let i = 0; i < ie_importParsedData.length; i++) {
                 const row = ie_importParsedData[i];
