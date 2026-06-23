@@ -4054,7 +4054,7 @@
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
-                        showToast((n || '').trim().split(' ')[0] + "'s ID Saved");
+                        showModal('success', 'Entry Saved', `${(n || '').trim()}'s record has been successfully saved.`);
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -4547,7 +4547,10 @@
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
 
                     if (currentUser && currentUser.userId === 'admin') {
-                        if (!isRecVerified) return false;
+                        // Admin should not see pending records (without photos)
+                        if (activeStatusFilter === 'pending' || (!isRecVerified && !hasAppPhoto)) {
+                            return false;
+                        }
                     }
 
                     if (activeStatusFilter === 'verified') {
@@ -5966,9 +5969,8 @@
                     };
                 } else {
                     iconDiv.className = "w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-100 text-emerald-600";
-                    iconDiv.innerHTML = '<i data-lucide="check-circle"></i>';
-                    actions.innerHTML = '';
-                    setTimeout(() => { if (!document.getElementById('custom-modal').classList.contains('hidden') && modalMode === 'default') closeModal(); }, 1400);
+                    iconDiv.innerHTML = '<i class="fa-solid fa-circle-check text-[24px]"></i>';
+                    actions.innerHTML = `<button onclick="closeModal()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-check"></i> OK</button>`;
                 }
                 lucide.createIcons();
             }
@@ -6271,18 +6273,10 @@
                         }
                     }
 
-                    if (currentUser && currentUser.userId === 'admin') {
-                        deleted.isDeleted = true;
-                        deleted.verified = 'Returned';
-                        serverCallSilent('updateRecord', [deleted], ()=>{}, ()=>{});
-                        showToast('Record Returned to School');
-                    } else {
-                        db = db.filter(r => r.id !== id);
-                        
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
-                        showToast('Record removed successfully');
-                    }
+                    db = db.filter(r => r.id !== id);
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                    serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
+                    showToast('Record removed successfully');
 
                     renderHomeAnalysis();
                     filterRecords();
@@ -8534,12 +8528,10 @@
                 importCount++;
             }
             
-            saveToLocal();
             filterRecords();
             renderHomeAnalysis();
-            
-            showToast(`Successfully imported ${importCount} records.`);
             closeImportExportModal();
+            showModal('success', 'Import Successful', `Successfully imported ${importCount} records into the pending list.`);
         } catch(err) {
             console.error(err);
             showToast("Import failed: " + err.message, true);
