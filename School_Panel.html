@@ -8529,7 +8529,7 @@
                     record.status = 'pending';
                 }
                 
-                record.id = generateId();
+                record.id = 'draft_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + i;
                 db.unshift(record);
                 serverCallSilent('addRecord', [record], ()=>{}, ()=>{});
                 importCount++;
@@ -8554,4 +8554,3 @@
 </body>
 
 </html>
-

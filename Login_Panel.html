@@ -9,6 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="icon" type="image/png" href="./fevicon.png">
     <link rel="apple-touch-icon" href="./idapplogo.png">
+    <link rel="manifest" href="manifest.json">
     <title id="page-title">Login - IDentify</title>
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -65,7 +66,7 @@
 
     <!-- Login Overlay: always visible on this page -->
     <div id="login-overlay" class="fixed inset-0 z-[11000] flex items-center justify-center bg-[#f0f4f8] p-4 overflow-y-auto">
-        <div class="relative w-full max-w-[340px] rounded-[28px] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.13)] overflow-hidden border border-slate-100 mt-2">
+        <div id="login-card" class="relative w-full max-w-[340px] rounded-[28px] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.13)] overflow-hidden border border-slate-100 mt-2">
             
             <!-- Punch Hole Cutout (Lanyard Slot) -->
             <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-12 h-3 bg-[#f0f4f8] rounded-full shadow-[inset_0_2px_5px_rgba(0,0,0,0.08)] flex items-center justify-center z-20 border border-slate-100/50">
@@ -189,11 +190,19 @@
             }
         }
 
+        function xorCipher(str, key = 'IdentifySecretKey') {
+            let res = '';
+            for (let i = 0; i < str.length; i++) {
+                res += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return res;
+        }
+
         function decryptLocal(str) {
             try {
-                return atob(str);
+                return xorCipher(atob(str));
             } catch (e) {
-                return str;
+                return '';
             }
         }
 
@@ -480,20 +489,34 @@
 
             // Mobile keyboard layout fix
             const overlay = document.getElementById('login-overlay');
-            if(overlay) {
-                const loginCard = overlay.querySelector('.relative.w-full.max-w-\\[340px\\]');
+            if (overlay) {
+                const loginCard = document.getElementById('login-card');
                 const inputs = overlay.querySelectorAll('input');
+                let blurTimeout = null;
                 
-                if(loginCard && inputs.length > 0) {
+                if (loginCard && inputs.length > 0) {
                     inputs.forEach(input => {
                         input.addEventListener('focus', () => {
+                            if (blurTimeout) {
+                                clearTimeout(blurTimeout);
+                                blurTimeout = null;
+                            }
                             if (window.innerWidth < 640) {
-                                loginCard.style.transform = 'translateY(-20vh)';
                                 loginCard.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                                loginCard.style.transform = 'translateY(-20vh)';
                             }
                         });
                         input.addEventListener('blur', () => {
-                            loginCard.style.transform = 'translateY(0)';
+                            blurTimeout = setTimeout(() => {
+                                if (window.innerWidth < 640) {
+                                    loginCard.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                                    loginCard.style.transform = '';
+                                }
+                                // Reset any page/overlay scroll shifts caused by the mobile keyboard
+                                overlay.scrollTop = 0;
+                                window.scrollTo(0, 0);
+                                document.body.scrollTop = 0;
+                            }, 100);
                         });
                     });
                 }
