@@ -897,24 +897,14 @@
                         showPhotoPreview(photoData);
                         
                         if (previewRecord) {
+                            previewRecord._isEditingMode = true;
                             previewRecord.photo = dataUrl;
-                            previewRecord.verified = true;
+                            previewRecord._displayPhotoSrc = dataUrl;
                             storeRecordInDb(previewRecord);
                             queueServerDraftSync();
                             
-                            const chip = document.getElementById('preview-status-chip');
-                            if (chip) {
-                                chip.innerHTML = '<i class="fa-solid fa-circle-check"></i> Verified';
-                                chip.className = 'px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 flex items-center gap-1 uppercase tracking-wider';
-                            }
-                            
-                            const upBtn = document.getElementById('preview-upload-photo-btn');
-                            if(upBtn) upBtn.style.display = 'none';
-                            const camBtn = document.getElementById('preview-camera-photo-btn');
-                            if(camBtn) camBtn.style.display = 'none';
-                            
-                            showToast('Photo Uploaded & Verified!');
-                            if (typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending') renderCurrentRecordsPage();
+                            showToast('Photo Uploaded Successfully!');
+                            renderCurrentRecordsPage();
                         }
                     });
                 };
@@ -952,13 +942,14 @@
                 if (blankRecordMode === 'preview' || blankRecordMode === 'student') {
                     if (previewRecord) {
                         previewRecord.photo = '';
+                        previewRecord._displayPhotoSrc = '';
+                        previewRecord._isEditingMode = false;
                         storeRecordInDb(previewRecord);
                         queueServerDraftSync();
                         
-                        const upBtn = document.getElementById('preview-upload-photo-btn');
-                        if(upBtn) upBtn.style.display = '';
-                        const camBtn = document.getElementById('preview-camera-photo-btn');
-                        if(camBtn) camBtn.style.display = '';
+                        if (blankRecordMode === 'preview') {
+                            renderCurrentRecordsPage();
+                        }
                     }
                 }
             }
@@ -5121,6 +5112,22 @@
                                 <div class="flex items-center justify-center h-full w-full ${hasDoc ? 'hidden' : ''}">
                                     <i class="fa-solid fa-user-tie text-[#05996c] text-[130px]"></i>
                                 </div>
+                                ${(hasDoc && typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && previewRecord && previewRecord._isEditingMode) ? `
+                                <button type="button" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
+                                    <i class="fa-solid fa-crop-simple"></i>
+                                </button>
+                                <button type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-rose-600">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                                ` : ''}
+                                ${!hasDoc ? `
+                                <button type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(false);" class="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-emerald-600">
+                                    <i class="fa-solid fa-cloud-arrow-up text-[11px]"></i>
+                                </button>
+                                <button type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(true);" class="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
+                                    <i class="fa-solid fa-camera text-[11px]"></i>
+                                </button>
+                                ` : ''}
                             </div>
                         </div>
 
@@ -5653,20 +5660,6 @@
                             <div id="blank-photo-placeholder" class="flex items-center justify-center h-full w-full" style="${isPhotoPresent ? 'display:none' : ''}">
                                 <i class="fa-solid fa-user-tie text-[#05996c] text-[150px]"></i>
                             </div>
-                            <button id="blank-crop-photo-btn" type="button" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
-                                <i class="fa-solid fa-crop-simple"></i>
-                            </button>
-                            <button id="blank-remove-photo-btn" type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
-                                <i class="fa-solid fa-xmark"></i>
-                            </button>
-                            ${(typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && !isPhotoPresent) ? `
-                            <button id="preview-upload-photo-btn" type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(false);" class="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-emerald-600">
-                                <i class="fa-solid fa-upload text-[11px]"></i>
-                            </button>
-                            <button id="preview-camera-photo-btn" type="button" onclick="event.stopPropagation(); triggerDirectPreviewUpload(true);" class="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600">
-                                <i class="fa-solid fa-camera text-[11px]"></i>
-                            </button>
-                            ` : ''}
                         </div>` : ''}
                         
                         <div class="flex-1 flex flex-col justify-between py-0.5">
@@ -6741,6 +6734,7 @@
                 }
                 // Redirect to Premium Preview Page instead of showing a popup
                 previewRecord = rec;
+                previewRecord._isEditingMode = isPendingContext || isSavePreview;
                 if (currentTab !== 'records') {
                     showTab('records');
                 }
