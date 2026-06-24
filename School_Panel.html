@@ -32,15 +32,21 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBMZ3LUNSQubKjanv4MNyDNsvKwPmsKQY8",
-            authDomain: "id3files.firebaseapp.com",
-            projectId: "id3files",
-            storageBucket: "id3files.firebasestorage.app",
-            messagingSenderId: "839961631978",
-            appId: "1:839961631978:web:4300cbe1fcb1461878cb93"
-        };
+        const _k = "QUl6YVN5Qk1aM0xVTlNRdWJLamFudjRNTnlETnN2S3dQbXNLUVk4";
+        const _d = "aWQzZmlsZXMuZmlyZWJhc2VhcHAuY29t";
+        const _p = "aWQzZmlsZXM=";
+        const _s = "aWQzZmlsZXMuZmlyZWJhc2VzdG9yYWdlLmFwcA==";
+        const _m = "ODM5OTYxNjMxOTc4";
+        const _a = "MTo4Mzk5NjE2MzE5Nzg6d2ViOjQzMDBjYmUxZmNiMTQ2MTg3OGNiOTM=";
 
+        const firebaseConfig = {
+            apiKey: atob(_k),
+            authDomain: atob(_d),
+            projectId: atob(_p),
+            storageBucket: atob(_s),
+            messagingSenderId: atob(_m),
+            appId: atob(_a)
+        };
         try {
             const app = initializeApp(firebaseConfig);
             window.db = getFirestore(app);
@@ -510,10 +516,14 @@
 
             function activateRecycleBinFilter() {
                 closeAllMenus();
+                if (typeof setBlankRecordMode === 'function') setBlankRecordMode('none');
                 const binBtn = document.getElementById('btn-recycle-bin');
                 if (binBtn) {
                     binBtn.style.display = 'flex';
                     showToast('Recycle Bin unlocked for 1 minute');
+                    
+                    showTab('records');
+                    setChipFilter('status', 'recycleBin');
                     
                     if (recycleBinTimer) clearTimeout(recycleBinTimer);
                     
@@ -532,11 +542,110 @@
             const SN_KEY = 'fb_form_sn_v1';
             const RECORD_UPDATES_KEY = 'student_updates_v1';
             const FORM_DRAFT_KEY = 'student_draft_v1';
+
+            // --- IndexedDB Wrapper & Offline Queue ---
+            const SchoolLocalDB = {
+                dbName: 'SchoolSystemDB',
+                version: 1,
+                init: function() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, this.version);
+                        request.onupgradeneeded = (e) => {
+                            const idb = e.target.result;
+                            if (!idb.objectStoreNames.contains('store')) {
+                                idb.createObjectStore('store');
+                            }
+                            if (!idb.objectStoreNames.contains('syncQueue')) {
+                                idb.createObjectStore('syncQueue', { keyPath: 'id' });
+                            }
+                        };
+                        request.onsuccess = (e) => resolve(e.target.result);
+                        request.onerror = (e) => reject(e.target.error);
+                    });
+                },
+                get: async function(key) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('store', 'readonly');
+                            const store = tx.objectStore('store');
+                            const req = store.get(key);
+                            req.onsuccess = () => resolve(req.result);
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { return null; }
+                },
+                set: async function(key, val) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('store', 'readwrite');
+                            const store = tx.objectStore('store');
+                            const req = store.put(val, key);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                enqueueSync: async function(record) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readwrite');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.put(record);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                dequeueSync: async function(id) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readwrite');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.delete(id);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                getAllSyncQueue: async function() {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readonly');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.getAll();
+                            req.onsuccess = () => resolve(req.result || []);
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { return []; }
+                }
+            };
+
+            window.addEventListener('online', async () => {
+                const queue = await SchoolLocalDB.getAllSyncQueue();
+                if (queue.length > 0) {
+                    showToast('<span class="material-symbols-outlined mr-2">cloud_upload</span> Syncing ' + queue.length + ' offline records...');
+                    for (const item of queue) {
+                        serverCallSilent(item.fn, [item.data], async () => {
+                            await SchoolLocalDB.dequeueSync(item.id);
+                            const idx = db.findIndex(x => x.id === item.id);
+                            if (idx > -1) {
+                                db[idx]._syncStatus = 'synced';
+                                if (currentTab === 'records') renderCurrentRecordsPage();
+                            }
+                        });
+                    }
+                }
+            });
             const AUTH_USER_KEY = 'student_auth_v1';
             const CONFIG_KEY = 'school_config_v1';
             const DEMO_RECORDS = [];
             let sortKey = 'recent', sortAsc = false, currentTab = 'home', tabHistory = [], scrollIntervals = {}, chartYear = '';
-            let currentRecordsPage = 1, recordsPageSize = 50, currentRenderedRecords = [];
+            let currentRecordsPage = 1, currentRenderLimit = 30, currentRenderedRecords = [];
             let appHistoryDepth = 0;
             let pendingHighlightId = null;
             let autoLogoutTimer = null;
@@ -584,7 +693,25 @@
                 }
             }
             function serverCallSilent(fn, args, onSuccess, onFailure) {
-                serverCall(fn, args, onSuccess, onFailure);
+                if (!navigator.onLine && (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord')) {
+                    const rec = args[0];
+                    if (rec && rec.id) {
+                        SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
+                        if (onSuccess) onSuccess(rec);
+                        return;
+                    }
+                }
+                serverCall(fn, args, onSuccess, (err) => {
+                    if (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord') {
+                        const rec = args[0];
+                        if (rec && rec.id) {
+                            SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
+                            if (onSuccess) onSuccess(rec);
+                            return;
+                        }
+                    }
+                    if (onFailure) onFailure(err);
+                });
             }
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
                 const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
@@ -3372,6 +3499,7 @@
                 }
                 
                 item.isDeleted = false;
+                item.isRestored = true;
                 item.deletedAt = null;
                 storeRecordInDb(item);
                 try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, item).catch(()=>{}); } catch(e){}
@@ -3405,30 +3533,52 @@
             }
 
             function restoreRecord(id) {
-                const item = findRecordById(bin, id);
-                serverCall('restoreRecord', [id], (ok) => {
-                    if (ok) {
-                        addActivity('RESTORE', item || {});
-                        loadAllData();
-                        showToast('Record Restored');
-                    } else {
-                        showModal('error', 'Failed', 'Record not found in bin.');
-                    }
-                });
+                const item = findRecordById(db, id);
+                if (!item) {
+                    showModal('error', 'Failed', 'Record not found in bin.');
+                    return;
+                }
+                
+                item.isDeleted = false;
+                item.isRestored = true;
+                item.deletedAt = null;
+                storeRecordInDb(item);
+                try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, item).catch(()=>{}); } catch(e){}
+                serverCallSilent('restoreRecord', [id], ()=>{}, ()=>{});
+                
+                addActivity('RESTORE', item);
+                showToast('Record Restored Successfully');
+                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
+                renderRecycleBin();
+                renderHomeAnalysis();
+                filterRecords();
+                
+                if (previewRecord && String(previewRecord.id) === String(id)) {
+                    previewRecord.isDeleted = false;
+                    previewRecord.deletedAt = null;
+                    setBlankRecordMode('preview');
+                }
             }
 
             function permDelete(id) {
                 if (!confirm('Permanently Delete?')) return;
                 const item = findRecordById(bin, id);
-                serverCall('permDelete', [id], (ok) => {
-                    if (ok) {
-                        if (item) addActivity('PERM_DELETE', item);
-                        loadAllData();
-                        showToast('Permanently Deleted');
-                    } else {
-                        showModal('error', 'Failed', 'Record not found in bin.');
-                    }
-                });
+                if (item) {
+                    db = db.filter(r => String(r.id) !== String(id));
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                    addActivity('PERM_DELETE', item);
+                }
+                serverCallSilent('deleteRecordPermanently', [id], ()=>{}, ()=>{});
+                showToast('Permanently Deleted');
+                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
+                renderRecycleBin();
+                renderHomeAnalysis();
+                filterRecords();
+                
+                if (previewRecord && String(previewRecord.id) === String(id)) {
+                    previewRecord = null;
+                    setBlankRecordMode('none');
+                }
             }
 
             // --- ACTIVITY MODAL ---
@@ -3660,10 +3810,9 @@
                 if (!r) return;
                 clearDraft();
 
-                // Ensure inline form is open
-                const form = document.getElementById('inline-student-form');
-                if (form && form.classList.contains('hidden')) {
-                    toggleStudentForm();
+                // Ensure form mode is active
+                if (typeof setBlankRecordMode === 'function' && blankRecordMode !== 'student') {
+                    setBlankRecordMode('student');
                 }
 
                 document.getElementById('edit-id').value = r.id;
@@ -3676,6 +3825,8 @@
                 if (document.getElementById('blank-dob')) document.getElementById('blank-dob').value = r.dob || '';
                 if (document.getElementById('blank-gender')) document.getElementById('blank-gender').value = r.gender || 'Other';
                 if (document.getElementById('blank-class')) document.getElementById('blank-class').value = r.sclass || 'General';
+                if (document.getElementById('mainSearch')) document.getElementById('mainSearch').value = r.studentName || '';
+                if (document.getElementById('global-search')) document.getElementById('global-search').value = r.fatherName || '';
 
                 photoData = null;
                 pendingUploadedDocument = null;
@@ -3817,8 +3968,18 @@
                         el.addEventListener('input', handleTitleCaseInput);
                     }
 
-                    el.addEventListener('input', () => { queueDraftSave(getSectionNameForInput(el.id)); });
-                    el.addEventListener('change', () => { queueDraftSave(getSectionNameForInput(el.id)); });
+                    el.addEventListener('input', () => { 
+                        queueDraftSave(getSectionNameForInput(el.id)); 
+                        if (['studentName', 'fatherName', 'sclass'].includes(k)) {
+                            checkDuplicateRecordPrompt();
+                        }
+                    });
+                    el.addEventListener('change', () => { 
+                        queueDraftSave(getSectionNameForInput(el.id)); 
+                        if (['studentName', 'fatherName', 'sclass'].includes(k)) {
+                            checkDuplicateRecordPrompt();
+                        }
+                    });
                 });
             }
             function setUploadFieldProgress(text, progress, active = true) { 
@@ -4188,22 +4349,23 @@
                     const nLower = n.trim().toLowerCase();
                     const fatherLower = fatherVal.trim().toLowerCase();
                     const clLower = cl.trim().toLowerCase();
-                    
-                    const duplicate = db.find(r => {
-                        if (eid && r.id === eid) return false;
-                        if (!eid && typeof draftServerRecordId !== 'undefined' && r.id === draftServerRecordId) return false;
-                        if (!nLower) return false;
-                        const rName = (r.studentName || '').trim().toLowerCase();
-                        const rFather = (r.fatherName || '').trim().toLowerCase();
-                        const rClass = (r.sclass || '').trim().toLowerCase();
-                        return rName === nLower && rFather === fatherLower && rClass === clLower;
-                    });
+                    let duplicate = null;
+                    if (!eid) {
+                        duplicate = db.find(r => {
+                            if (typeof draftServerRecordId !== 'undefined' && draftServerRecordId && String(r.id) === String(draftServerRecordId)) return false;
+                            if (!nLower) return false;
+                            const rName = (r.studentName || '').trim().toLowerCase();
+                            const rFather = (r.fatherName || '').trim().toLowerCase();
+                            const rClass = (r.sclass || '').trim().toLowerCase();
+                            return rName === nLower && rFather === fatherLower && rClass === clLower;
+                        });
+                    }
                     
                     if (duplicate && !proceedSave.bypassDuplicateCheck) {
                         isSavingRecord = false;
                         showModal('confirm', 
                             'Duplicate Entry Found!', 
-                            `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span> (Record ID: <span class="text-slate-900 font-bold text-[15px]">${duplicate.id}</span>).<br><br>Would you like to open the existing record or proceed to create a new one?`, 
+                            `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
                             () => {
                                 proceedSave.bypassDuplicateCheck = true;
                                 proceedSave();
@@ -4211,7 +4373,11 @@
                             'Create New'
                         );
                         
-                        // Customize modal actions to support "Open Existing", "Create New" and "Cancel"
+                        // Show close icon at top right
+                        const closeIcon = document.getElementById('modal-close-icon');
+                        if (closeIcon) closeIcon.classList.remove('hidden');
+
+                        // Customize modal actions to support "Open Existing", "Create New"
                         const actions = document.getElementById('modal-actions');
                         if (actions) {
                             actions.innerHTML = `
@@ -4220,7 +4386,6 @@
                                         <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
                                         <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
                                     </div>
-                                    <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
                                 </div>
                             `;
                             
@@ -4228,7 +4393,6 @@
                             document.getElementById('modal-load-old-btn').onclick = () => {
                                 closeModal();
                                 populateFormFromRecord(duplicate);
-                                showStatusCard('Record Loaded', 'Purani entry form me load ho gayi hai.', { tone: 'success' });
                             };
                             
                             // Bind "Phir bhi New" button
@@ -4282,7 +4446,10 @@
                         createdAt: eid ? ((existing && existing.createdAt) || nowTs) : nowTs,
                         updatedAt: nowTs, 
                         draftStatus: (eid || isPendingBatch) ? '' : 'DRAFT',
-                        verified: !!(existing && existing.verified),
+                        verified: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? false : !!(existing && existing.verified && String(existing.verified).toLowerCase() !== 'false'),
+                        returned: false,
+                        isRestored: false,
+                        status: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? (hasPendingOrSavedDoc ? 'unverified' : 'pending') : (existing ? existing.status : (hasPendingOrSavedDoc ? 'unverified' : 'pending')),
                         _serverSaved: existing ? !!existing._serverSaved : false,
                         // Preserved metadata fields
                         timestamp: existing ? (existing.timestamp || getFormattedTimestamp(nowTs)) : getFormattedTimestamp(nowTs),
@@ -4309,8 +4476,8 @@
                     const finalizeSave = () => {
                         isSavingRecord = false;
                         toggleSaveLoading(false);
-                        addActivity(editId ? 'UPDATE' : 'ADD', rec);
-                        if (!editId) clearDraft();
+                        addActivity(eid ? 'UPDATE' : 'ADD', rec);
+                        if (!eid) clearDraft();
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
@@ -4352,7 +4519,7 @@
                         finalizeSave();
                     };
 
-                    isPreviewFromSave = true;
+                    isPreviewFromSave = !eid;
                     isSavingRecord = false;
                     toggleSaveLoading(false);
                     const _immediatePhotoSrc = _getPreviewPhotoSrc();
@@ -4961,18 +5128,18 @@
 
                 const total = currentRenderedRecords.length;
                 const dbTotal = db.length;
-                const startIndex = (currentRecordsPage - 1) * recordsPageSize;
-                const showing = Math.min(startIndex + recordsPageSize, total);
+                const startIndex = 0;
+                const showing = Math.min(currentRenderLimit, total);
                 countEl.innerHTML = `<i class="fa-solid fa-users text-[10px] mr-1"></i> ${total}`;
                 
-                const isVisibleEmpty = total === 0;
-                // Show count only when there is data
-                if (iWrapper) iWrapper.classList.toggle('hidden', isVisibleEmpty);
+                if (iWrapper) {
+                    if (total === 0) iWrapper.classList.add('hidden');
+                    else iWrapper.classList.remove('hidden');
+                }
 
-                // Show pagination controls / page info only when more than one page exists
-                const pageCount = Math.max(1, Math.ceil(total / recordsPageSize));
-                const showPagination = !isVisibleEmpty && pageCount > 1;
-                if (pControls) pControls.classList.toggle('hidden', !showPagination);
+                // Hide pagination controls entirely for lazy loading
+                const showPagination = false;
+                if (pControls) pControls.classList.toggle('hidden', true);
                 // Also toggle the footer-page-info text visibility
                 const pageInfoEl = document.getElementById('footer-page-info');
                 if (pageInfoEl) pageInfoEl.parentElement.classList.toggle('hidden', !showPagination);
@@ -4994,22 +5161,13 @@
             function updateRecordsPageInfo() {
                 const info = document.getElementById('footer-page-info');
                 const controls = document.getElementById('footer-pagination-controls');
-                const totalPages = Math.max(1, Math.ceil(currentRenderedRecords.length / recordsPageSize));
                 if (!info) return;
 
-                if (totalPages > 1) {
-                    info.innerText = `Page ${currentRecordsPage} of ${totalPages}`;
-                    if (controls) controls.classList.remove('hidden');
-                } else {
-                    info.innerText = '';
-                    if (controls) controls.classList.add('hidden');
-                }
+                info.innerText = '';
+                if (controls) controls.classList.add('hidden');
             }
             function scrollTableRows(direction) {
-                const totalPages = Math.max(1, Math.ceil(currentRenderedRecords.length / recordsPageSize));
-                if (totalPages <= 1) return;
-                currentRecordsPage = Math.min(totalPages, Math.max(1, currentRecordsPage + direction));
-                renderCurrentRecordsPage();
+                // Pagination disabled for lazy loading
             }
 
             function getDataInfoStats(records) {
@@ -5191,27 +5349,43 @@
                         const isPreviewVerified = (rec.verified === true || String(rec.verified).toLowerCase() === 'true') && !isReturned;
                         const previewSyncStatus = rec._syncStatus || (rec._serverSaved ? 'synced' : '');
                         let previewVerifiedIcons = '';
-                        if (isPreviewVerified) {
+                        if (rec.isDeleted) {
                             previewVerifiedIcons = `
                             <div class="flex items-center gap-1.5 shrink-0 pl-3">
-                                <span class="material-symbols-outlined status-drive-icon ${previewSyncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${previewSyncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>
-                                <span class="material-symbols-outlined text-[16px] text-emerald-600" style="font-variation-settings: 'FILL' 1;" title="Verified">verified</span>
-                            </div>`;
-                        } else if (rec.isDeleted) {
-                            previewVerifiedIcons = `
-                            <div class="flex items-center gap-1.5 shrink-0 pl-3">
-                                <div class="bg-red-50 px-2 py-0.5 rounded border border-red-200 flex items-center gap-1">
-                                    <i class="fa-solid fa-trash-can-arrow-up text-red-500 text-[10px]"></i>
-                                    <span class="text-[9px] font-black uppercase text-red-600 tracking-widest">Deleted</span>
-                                </div>
+                                <i class="fa-solid fa-trash-can-arrow-up text-[16px] text-red-500" title="Deleted"></i>
                             </div>`;
                         } else if (isReturned) {
                             previewVerifiedIcons = `
                             <div class="flex items-center gap-1.5 shrink-0 pl-3">
-                                <div class="bg-amber-50 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
-                                    <span class="material-symbols-outlined text-[12px] text-amber-500" style="font-variation-settings: 'FILL' 1;">assignment_return</span>
-                                    <span class="text-[9px] font-black uppercase text-amber-600 tracking-widest">Returned</span>
-                                </div>
+                                <span class="material-symbols-outlined text-[16px] text-amber-500" style="font-variation-settings: 'FILL' 1;" title="Returned">settings_backup_restore</span>
+                            </div>`;
+                        } else {
+                            let syncIconHtml = '';
+                            if (hasDoc || isPreviewVerified) {
+                                if (previewSyncStatus === 'synced' || previewSyncStatus === 'syncing') {
+                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon ${previewSyncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${previewSyncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                                }
+                            }
+                            
+                            let statusIconHtml = '';
+                            if (isPreviewVerified) {
+                                statusIconHtml = `<span class="material-symbols-outlined text-[16px] text-emerald-600" style="font-variation-settings: 'FILL' 1;" title="Verified">verified</span>`;
+                            } else if (hasDoc) {
+                                statusIconHtml = `<span class="material-symbols-outlined text-[16px] text-amber-500" style="font-variation-settings: 'FILL' 1;" title="Unverified">unpublished</span>`;
+                            } else {
+                                statusIconHtml = `<span class="material-symbols-outlined text-[16px] text-rose-500" style="font-variation-settings: 'FILL' 1;" title="No Photo">no_photography</span>`;
+                            }
+
+                            let restoreIconHtml = '';
+                            if (rec.isRestored) {
+                                restoreIconHtml = `<span class="material-symbols-outlined text-[16px] text-indigo-500" style="font-variation-settings: 'FILL' 1;" title="Restored">settings_backup_restore</span>`;
+                            }
+                            
+                            previewVerifiedIcons = `
+                            <div class="flex items-center gap-1.5 shrink-0 pl-3">
+                                ${restoreIconHtml}
+                                ${syncIconHtml}
+                                ${statusIconHtml}
                             </div>`;
                         }
 
@@ -5885,19 +6059,33 @@
                     if (hiddenMobileInput) hiddenMobileInput.value = sanitizeMobileInput(hiddenMobileInput.value);
                     return;
                 }
-                const startIndex = (currentRecordsPage - 1) * recordsPageSize;
-                const pageItems = currentRenderedRecords.slice(startIndex, startIndex + recordsPageSize);
+                const pageItems = currentRenderedRecords.slice(0, currentRenderLimit);
 
                 if (pageItems.length === 0) {
                     t.innerHTML = '<div class="p-10 text-center text-slate-400 text-sm">No records found</div>';
                     return;
                 }
 
-                let currentRecordsHtml = '';
+                t.innerHTML = generateRecordsHtml(pageItems);
+
+                if (currentRenderLimit < currentRenderedRecords.length) {
+                    t.insertAdjacentHTML('beforeend', `<div id="load-more-trigger" class="h-10 mt-4 flex items-center justify-center"><i class="fa-solid fa-circle-notch fa-spin text-emerald-600"></i></div>`);
+                    setupLazyLoadObserver();
+                }
+
+                lucide.createIcons();
+                updateShowingCount();
+                updateRecordsPageInfo();
+                syncChipCounts();
+                updateBulkHeader();
+            }
+
+            function generateRecordsHtml(pageItems) {
+                let html = '';
                 pageItems.forEach((x, idx) => {
                     let displayId = x.id;
                     if (displayId && displayId.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\\s+/).map(w => w[0]).join('').toUpperCase();
                         const year = new Date().getFullYear().toString().slice(-2);
                         displayId = `${schoolInitials || "DPS"}${year}DRAFT`;
                     }
@@ -5911,12 +6099,14 @@
                     
                     let syncIconStatusHtml = '';
                     if (!x.isDeleted && (hasDoc || isRecVerified || isReturned)) {
-                        syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon ${syncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${syncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                        if (syncStatus === 'synced' || syncStatus === 'syncing') {
+                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon ${syncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${syncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                        }
                     }
 
                     // Records list - split click zones
                     if (activeStatusFilter === 'recycleBin') {
-                        currentRecordsHtml += `
+                        html += `
             <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition hover:bg-slate-50/50">
                 <div class="flex flex-1 items-stretch min-w-0">
                     <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
@@ -5928,16 +6118,16 @@
                     </div>
                 </div>
                 <div class="px-4 flex items-center justify-end gap-3 min-w-[80px]">
-                    <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm" title="Restore">
-                        <i class="fa-solid fa-rotate-left"></i>
+                    <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
+                        <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
                     </button>
-                    <button onclick="event.stopPropagation(); permDeleteRecord('${x.id}')" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
-                        <i class="fa-solid fa-trash-can"></i>
+                    <button onclick="event.stopPropagation(); permDeleteRecordFromBin('${x.id}')" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
+                        <i class="fa-solid fa-trash-can text-[14px]"></i>
                     </button>
                 </div>
             </div>`;
                     } else {
-                        currentRecordsHtml += `
+                        html += `
             <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40">
                 <!-- Data & Photo View: Preview Zone -->
                 <div class="flex flex-1 items-stretch min-w-0 record-preview-zone" data-id="${x.id}" data-hasdoc="${!hasDoc}">
@@ -5961,7 +6151,8 @@
                         ` : ''}
                     </div>
                     <div class="text-[8.5px] font-black uppercase tracking-widest ${isRecVerified ? 'text-emerald-600' : (x.isDeleted ? 'text-red-500' : (isReturned ? 'text-amber-500' : (hasDoc ? 'text-amber-500' : 'text-rose-500')))} flex items-center gap-1">
-                        ${x.isDeleted ? '<i class="fa-solid fa-trash-can-arrow-up text-red-500 text-[12px]" title="Deleted by Admin"></i>' : (isReturned ? '<span class="material-symbols-outlined text-[14px] text-amber-500" style="font-variation-settings: \'FILL\' 1;" title="Returned">assignment_return</span>' : '')}
+                        ${x.isDeleted ? '<i class="fa-solid fa-trash-can-arrow-up text-red-500 text-[12px]" title="Deleted by Admin"></i>' : (isReturned ? '<span class="material-symbols-outlined text-[14px] text-amber-500" style="font-variation-settings: \'FILL\' 1;" title="Returned">settings_backup_restore</span>' : '')}
+                        ${x.isRestored && !x.isDeleted ? '<span class="material-symbols-outlined text-[12px] text-indigo-500" style="font-variation-settings: \'FILL\' 1;" title="Restored">settings_backup_restore</span>' : ''}
                         ${syncIconStatusHtml}
                         ${isRecVerified ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">verified</span>' : ''}
                         ${isRecVerified ? '' : (hasDoc ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">unpublished</span>' : '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">no_photography</span>')}
@@ -5970,13 +6161,38 @@
             </div>`;
                     }
                 });
-                t.innerHTML = currentRecordsHtml;
+                return html;
+            }
 
+            let lazyObserver = null;
+            function setupLazyLoadObserver() {
+                const trigger = document.getElementById('load-more-trigger');
+                if (!trigger) return;
+                if (lazyObserver) lazyObserver.disconnect();
+                lazyObserver = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting) {
+                        appendMoreRecords();
+                    }
+                }, { rootMargin: '100px' });
+                lazyObserver.observe(trigger);
+            }
+
+            function appendMoreRecords() {
+                const t = document.getElementById('records-list-container');
+                const trigger = document.getElementById('load-more-trigger');
+                if (trigger) trigger.remove();
+                
+                const nextItems = currentRenderedRecords.slice(currentRenderLimit, currentRenderLimit + 30);
+                if (nextItems.length === 0) return;
+                
+                t.insertAdjacentHTML('beforeend', generateRecordsHtml(nextItems));
+                currentRenderLimit += 30;
+                
+                if (currentRenderLimit < currentRenderedRecords.length) {
+                    t.insertAdjacentHTML('beforeend', `<div id="load-more-trigger" class="h-10 mt-4 flex items-center justify-center"><i class="fa-solid fa-circle-notch fa-spin text-emerald-600"></i></div>`);
+                    setupLazyLoadObserver();
+                }
                 lucide.createIcons();
-                updateShowingCount();
-                updateRecordsPageInfo();
-                syncChipCounts();
-                updateBulkHeader();
             }
 
 
@@ -6118,7 +6334,7 @@
                 const binBadge = document.getElementById('bin-count-text');
                 if (binBadge) binBadge.innerText = binTotal;
             }
-            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRecordsPage = 1; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); }
+            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRenderLimit = 30; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); }
             window.addEventListener('storage', (event) => {
                 if (event.key === RECORD_UPDATES_KEY) refreshDatabaseAfterCertificateUpdate();
                 if (event.key && event.key.startsWith('identify_fb_')) {
@@ -6448,6 +6664,13 @@
                 showToast((localRec.studentName || 'Record') + ' Verified Successfully');
                 setChipFilter('status', 'verified'); 
                 previewRecord.verified = true;
+                
+                const idxSync = db.findIndex(x => x.id === localRec.id);
+                if (idxSync !== -1) {
+                    db[idxSync].verified = true;
+                    try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, db[idxSync]).catch(()=>{}); } catch(e){}
+                }
+                
                 saveAndNew(true); 
 
                 // Run heavy DB/ID generation in the background
@@ -6540,6 +6763,12 @@
                 const nowTs = Date.now();
                 
                 showToast((localRec.studentName || 'Record') + ' Verified Successfully');
+                
+                const idxSync = db.findIndex(x => x.id === localRec.id);
+                if (idxSync !== -1) {
+                    db[idxSync].verified = true;
+                    try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, db[idxSync]).catch(()=>{}); } catch(e){}
+                }
                 
                 const currentIdNew = localRec.id;
                 const pendingList = db.filter(x => !hasRecordDocument(x) && x.id !== currentIdNew);
@@ -6666,14 +6895,26 @@
                     draftServerRecordId = '';
                 }
 
-                // Show modal popup instead of instant UI reset, and wait for confirmation to reset form
                 showModal('success', modalTitle, '', () => {
-                    // RESET UI & NEXT FORM AFTER POPUP CLOSES
+                    const currentRec = previewRecord;
                     isPreviewFromSave = false;
-                    previewRecord = null;
                     isPendingBatch = false;
                     resetForm(true); 
-                    toggleStudentForm(true); 
+                    
+                    if (currentRec) {
+                        previewRecord = currentRec;
+                        const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
+                        const currentIndex = list.findIndex(r => r.id === previewRecord.id);
+                        if (currentIndex >= 0 && currentIndex < list.length - 1) {
+                            openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
+                            return;
+                        } else {
+                            showToast("You have reached the end.");
+                        }
+                    }
+                    
+                    previewRecord = null;
+                    closeStudentForm(); 
                 }, 'Yes, Delete', `${studentName}'s Data`);
             }
 
