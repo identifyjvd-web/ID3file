@@ -9,7 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="icon" type="image/png" href="./fevicon.png">
     <link rel="apple-touch-icon" href="./idapplogo.png">
-    <title id="page-title">IDentify-DPS</title>
+    <title id="page-title">IDentify</title>
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -238,7 +238,7 @@
                             <i id="search-icon" class="fa-solid fa-magnifying-glass text-slate-400 ml-2"></i>
                             <input type="text" id="mainSearch" placeholder="Search students..."
                                 class="bg-transparent border-none outline-none w-full text-sm font-medium ml-2 text-slate-700 placeholder-slate-400 transition-all"
-                                oninput="filterRecords()">
+                                oninput="onSearchInput()">
                             <h2 id="records-page-info-db"
                                 class="absolute inset-y-0 left-0 right-10 flex items-center text-[16px] font-extrabold text-[#059669] tracking-tight truncate leading-none pt-[1px] bg-white pointer-events-none hidden pl-2">
                             </h2>
@@ -570,8 +570,11 @@
                 const { collection, addDoc, getDocs, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
                     if (fn === 'getRecords') {
+                        if (window._recordsUnsubscribe) {
+                            window._recordsUnsubscribe();
+                        }
                         const q = query(collection(window.db, "records"), orderBy("updatedAt", "desc"));
-                        onSnapshot(q, (querySnapshot) => {
+                        window._recordsUnsubscribe = onSnapshot(q, (querySnapshot) => {
                             const records = [];
                             querySnapshot.forEach((doc) => { records.push({ id: doc.id, ...doc.data() }); });
                             if (onSuccess) onSuccess(records);
@@ -1340,8 +1343,7 @@
                             if (!appBooted) {
                                 appBooted = true;
                                 const sc = loadSchoolConfig();
-                                const pref = (sc.name || 'System').split(' ').map(w => w[0]).join('').toUpperCase();
-                                document.title = "IDentify-" + pref;
+                                document.title = "IDentify-" + (sc.code || "DPS");
                                 setSyncStatus('Connecting to server...', 5);
                                 loadAllData();
                             }
@@ -1359,8 +1361,7 @@
                         hideSplashScreen();
                         
                         const sc = loadSchoolConfig();
-                        const pref = (sc.name || 'System').split(' ').map(w => w[0]).join('').toUpperCase();
-                        document.title = "IDentify-" + pref;
+                        document.title = "IDentify-" + (sc.code || "DPS");
 
                         setSyncStatus('Connecting to server...', 5);
                         loadAllData();
@@ -1902,7 +1903,18 @@
                             }
                         });
                         
-                        db = filterDeletedFromList([...serverDb]);
+                        const pendingLocal = (typeof db !== 'undefined' ? db : []).filter(r => r._pending || r._syncStatus === 'syncing' || r._syncStatus === 'pending');
+                        const serverFiltered = filterDeletedFromList([...serverDb]);
+                        const mergedDb = serverFiltered.map(sRec => {
+                            const lRec = pendingLocal.find(l => String(l.id) === String(sRec.id) || (l.oldId && String(l.oldId) === String(sRec.id)));
+                            return lRec ? { ...sRec, ...lRec } : sRec;
+                        });
+                        pendingLocal.forEach(lRec => {
+                            if (!mergedDb.some(m => String(m.id) === String(lRec.id) || (m.oldId && String(m.oldId) === String(lRec.id)))) {
+                                mergedDb.push(lRec);
+                            }
+                        });
+                        db = mergedDb;
                         demoFallbackLoaded = false;
                         refreshUiAfterLoad();
                     }
@@ -2778,6 +2790,8 @@
             function toggleStudentForm(forceOpen = false) {
                 const icon = document.getElementById('toggle-icon');
                 if (icon && icon.classList.contains('fa-magnifying-glass') && forceOpen !== true) {
+                    filterRecords();
+                    
                     icon.className = 'fa-solid fa-plus';
                     const btn = document.getElementById('toggle-form-btn');
                     if (btn) btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
@@ -2874,9 +2888,6 @@
                 if (!search || !icon || !btn) return;
 
                 if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
-                filterDebounceTimer = setTimeout(() => {
-                    filterRecords();
-                }, 300);
 
                 const formOpen = !!wrapper && !wrapper.classList.contains('hidden');
                 if (formOpen || blankRecordMode !== 'none') return;
@@ -2889,11 +2900,12 @@
                     dbSearchTimer = setTimeout(() => {
                         icon.className = 'fa-solid fa-plus';
                         btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
-                    }, 5000);
+                    }, 12000);
                 } else {
                     icon.className = 'fa-solid fa-plus';
                     btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                     if (dbSearchTimer) clearTimeout(dbSearchTimer);
+                    filterRecords();
                 }
             }
 
@@ -4125,7 +4137,9 @@
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
-                        showModal('success', 'Saved Successfully', '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                        const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
+                        const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
+                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -5040,13 +5054,28 @@
                         
                         <!-- Details Section (Main Card) -->
                         <div class="preview-details-box mb-2">
-                            ${renderPreviewRow('fa-book', 'Class', rec.sclass)}
                             ${renderPreviewRow('fa-person', (rec.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o', rec.fatherName)}
+                            ${renderPreviewRow('fa-book', 'Class', rec.sclass)}
                             ${renderPreviewRow('fa-venus-mars', 'Gender', rec.gender)}
                             ${renderPreviewRow('fa-calendar-day', 'DOB', rec.dob)}
-                            ${renderPreviewRow('fa-mobile-screen', 'Mobile', rec.mobile)}
-                            ${renderPreviewRow('fa-fingerprint', 'Aadhar', rec.aadhar)}
-                            ${renderPreviewRow('fa-location-dot', 'Address', rec.address)}
+                            ${(() => {
+                                const order = (typeof fb_form_order !== 'undefined' && Array.isArray(fb_form_order) && fb_form_order.length > 0) ? fb_form_order : ['mobile', 'aadhar', 'address'];
+                                const fixedTop = ['photo', 'studentName', 'fatherName', 'sclass', 'gender', 'dob'];
+                                return order.filter(id => !fixedTop.includes(id)).map(id => {
+                                    if (id === 'mobile') return renderPreviewRow('fa-mobile-screen', 'Mobile', rec.mobile);
+                                    if (id === 'aadhar') return renderPreviewRow('fa-fingerprint', 'Aadhar', rec.aadhar);
+                                    if (id === 'address') return renderPreviewRow('fa-location-dot', 'Address', rec.address);
+                                    if (typeof fb_fields !== 'undefined' && fb_fields) {
+                                        const field = fb_fields.find(f => f.id === id);
+                                        if (field) {
+                                            const idx = fb_fields.indexOf(field);
+                                            const val = rec[`customField${idx + 1}`];
+                                            return val ? renderPreviewRow('fa-star', field.label, val) : '';
+                                        }
+                                    }
+                                    return '';
+                                }).join('');
+                            })()}
                         </div>
 
                         <!-- ID & Timestamp Section -->
@@ -5463,10 +5492,34 @@
                     const standardRenderOrder = (Array.isArray(fb_form_order) && fb_form_order.length)
                         ? fb_form_order.slice()
                         : FB_STANDARD_FIELDS.map(f => f.id);
-                    const orderedStandardHtml = standardRenderOrder
+                    const orderedFieldsHtml = standardRenderOrder
                         .filter(id => !FB_FIXED_TOP_FIELDS.includes(id))
-                        .filter(id => !!standardFieldRenderers[id] && getCfg(id).enabled)
-                        .map(id => standardFieldRenderers[id]())
+                        .map(id => {
+                            if (standardFieldRenderers[id] && getCfg(id).enabled) {
+                                return standardFieldRenderers[id]();
+                            } else if (fb_fields.some(f => f.id === id)) {
+                                const f = fb_fields.find(cf => cf.id === id);
+                                const idx = fb_fields.indexOf(f);
+                                const customKey = `customField${idx + 1}`;
+                                const val = previewRecord ? (previewRecord[customKey] || '') : '';
+                                let inputHtml = '';
+                                if (f.type === 'select') {
+                                    inputHtml = `
+                                        <select onchange="syncBlankSelect('in-customField${idx + 1}', this.value)" class="premium-input premium-select">
+                                            <option value="">Select ${f.label}</option>
+                                            ${(f.options || []).map(opt => `<option value="${escapeAttr(opt)}" ${val === opt ? 'selected' : ''}>${escapeAttr(opt)}</option>`).join('')}
+                                        </select>`;
+                                } else {
+                                    inputHtml = `<input type="${f.type === 'number' ? 'text' : f.type}" ${f.type === 'number' ? 'inputmode="numeric" pattern="[0-9]*"' : ''} value="${escapeAttr(val)}" placeholder="Enter ${f.label}" oninput="syncBlankField('in-customField${idx + 1}', this.value, this)" class="premium-input">`;
+                                }
+                                return `
+                                    <div class="premium-input-group">
+                                        <label class="premium-label"><i class="fa-solid fa-circle-info"></i> ${f.label} ${f.required ? '<span class="text-rose-500">*</span>' : ''}</label>
+                                        ${inputHtml}
+                                    </div>`;
+                            }
+                            return '';
+                        })
                         .join('');
 
                     t.innerHTML = `
@@ -5474,12 +5527,20 @@
                 <!-- Premium Decorative Card Graphics -->
                 <div class="absolute inset-0 pointer-events-none z-0" style="background-image: radial-gradient(rgba(5, 153, 108, 0.03) 1px, transparent 1px); background-size: 14px 14px; opacity: 0.7;"></div>
                 
-                <!-- Geometric Concentric Box Wireframe -->
-                <svg class="absolute top-[-30px] right-[-30px] w-40 h-40 opacity-[0.14] text-emerald-500 pointer-events-none z-0" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.3">
-                    <rect x="10" y="10" width="80" height="80" rx="4" />
-                    <rect x="20" y="20" width="60" height="60" rx="3" />
-                    <rect x="30" y="30" width="40" height="40" rx="2" />
-                    <rect x="40" y="40" width="20" height="20" rx="1" />
+                <svg class="absolute top-0 right-0 w-64 h-64 opacity-[0.03] text-emerald-600 pointer-events-none z-0 translate-x-1/3 -translate-y-1/3" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.5">
+                    <circle cx="50" cy="50" r="40" />
+                    <circle cx="50" cy="50" r="30" />
+                    <circle cx="50" cy="50" r="20" />
+                    <line x1="10" y1="50" x2="90" y2="50" />
+                    <line x1="50" y1="10" x2="50" y2="90" />
+                    <line x1="22" y1="22" x2="78" y2="78" />
+                    <line x1="22" y1="78" x2="78" y2="22" />
+                </svg>
+
+                <svg class="absolute bottom-0 left-0 w-48 h-48 opacity-[0.03] text-emerald-600 pointer-events-none z-0 -translate-x-1/4 translate-y-1/4" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.5">
+                    <rect x="20" y="20" width="60" height="60" rx="4" />
+                    <rect x="30" y="30" width="40" height="40" rx="4" />
+                    <rect x="40" y="40" width="20" height="20" rx="4" />
                     <line x1="0" y1="0" x2="100" y2="100" />
                     <line x1="100" y1="0" x2="0" y2="100" />
                 </svg>
@@ -5552,30 +5613,7 @@
                     </div>
 
                     <div class="space-y-4">
-                        ${orderedStandardHtml}
-
-                        <!-- DYNAMIC CUSTOM FIELDS -->
-                        <div class="space-y-4">
-                            ${fb_fields.map((f, idx) => {
-                        const customKey = `customField${idx + 1}`;
-                        const val = previewRecord ? (previewRecord[customKey] || '') : '';
-                        let inputHtml = '';
-                        if (f.type === 'select') {
-                            inputHtml = `
-                                        <select onchange="syncBlankField('in-customField${idx + 1}', this.value, this)" class="premium-input premium-select">
-                                            <option value="">Select ${f.label}</option>
-                                            ${(f.options || []).map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                                        </select>`;
-                        } else {
-                            inputHtml = `<input type="${f.type === 'number' ? 'text' : f.type}" ${f.type === 'number' ? 'inputmode="numeric" pattern="[0-9]*"' : ''} value="${val}" placeholder="Enter ${f.label}" oninput="syncBlankField('in-customField${idx + 1}', this.value, this)" class="premium-input">`;
-                        }
-                        return `
-                                    <div class="premium-input-group">
-                                        <label class="premium-label"><i class="fa-solid fa-circle-info"></i> ${f.label} ${f.required ? '<span class="text-rose-500">*</span>' : ''}</label>
-                                        ${inputHtml}
-                                    </div>`;
-                    }).join('')}
-                        </div>
+                        ${orderedFieldsHtml}</div>
 
                         <div class="pt-6 flex gap-3">
                             <button type="button" onclick="${isEditMode ? 'closeStudentForm()' : 'resetForm()'}" class="w-[100px] h-[38px] !py-0 bg-slate-50 hover:bg-slate-100 active:scale-[0.98] transition-all text-slate-500 rounded-[18px] font-black text-[13px] flex items-center justify-center gap-2 border border-slate-100">
@@ -5806,6 +5844,11 @@
             function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRecordsPage = 1; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); }
             window.addEventListener('storage', (event) => {
                 if (event.key === RECORD_UPDATES_KEY) refreshDatabaseAfterCertificateUpdate();
+                if (event.key && event.key.startsWith('identify_fb_')) {
+                    if (typeof fb_bootFromStorage === 'function') fb_bootFromStorage();
+                    if (typeof fb_renderForm === 'function') fb_renderForm();
+                    if (typeof renderCurrentRecordsPage === 'function') renderCurrentRecordsPage();
+                }
             });
             window.addEventListener('focus', refreshDatabaseAfterCertificateUpdate);
             document.addEventListener('visibilitychange', () => {
@@ -6125,6 +6168,7 @@
                 // Instant feedback & clear form
                 showToast((localRec.studentName || 'Record') + ' Verified Successfully');
                 setChipFilter('status', 'verified'); 
+                previewRecord.verified = true;
                 saveAndNew(true); 
 
                 // Run heavy DB/ID generation in the background
@@ -6150,10 +6194,14 @@
                             console.error('Background ID generation failed:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
                             if (idxInDb !== -1) {
+                                db[idxInDb].verified = true;
                                 db[idxInDb]._syncStatus = 'pending';
+                                db[idxInDb]._pending = true;
+                                syncVerifiedRecordToGoogle(db[idxInDb]);
                                 renderCurrentRecordsPage();
                             }
                             isActionPending = false;
+                            showToast("Network Error: ID Generation Failed. Saved as Draft.", "error");
                             return;
                         }
 
@@ -6251,10 +6299,14 @@
                             console.error('Background ID generation failed in verifyAndGoNext:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
                             if (idxInDb !== -1) {
+                                db[idxInDb].verified = true;
                                 db[idxInDb]._syncStatus = 'pending';
+                                db[idxInDb]._pending = true;
+                                syncVerifiedRecordToGoogle(db[idxInDb]);
                                 renderCurrentRecordsPage();
                             }
                             isActionPending = false;
+                            showToast("Network Error: ID Generation Failed. Saved as Draft.", "error");
                             return;
                         }
 
@@ -6320,7 +6372,8 @@
             function saveAndNew(skipServerFinalize = false) {
                 const studentName = (previewRecord && previewRecord.studentName) ? previewRecord.studentName.trim() : 'Student';
                 const firstName = studentName.split(' ')[0];
-                const isVerified = previewRecord && (previewRecord.verified === true || String(previewRecord.verified).toLowerCase() === 'true');
+                const isVerified = previewRecord && previewRecord.verified && String(previewRecord.verified).toLowerCase() !== 'false';
+                const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
 
                 // Background Finalization
                 if (!skipServerFinalize && previewRecord && previewRecord.id) {
@@ -6335,7 +6388,7 @@
                 }
 
                 // Show modal popup instead of instant UI reset, and wait for confirmation to reset form
-                showModal('success', 'Saved Successfully', '', () => {
+                showModal('success', modalTitle, '', () => {
                     // RESET UI & NEXT FORM AFTER POPUP CLOSES
                     isPreviewFromSave = false;
                     previewRecord = null;
