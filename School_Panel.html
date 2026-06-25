@@ -28,7 +28,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, enableIndexedDbPersistence, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction, writeBatch, where } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
@@ -50,18 +50,13 @@
         try {
             const app = initializeApp(firebaseConfig);
             window.db = getFirestore(app);
-            
-            enableIndexedDbPersistence(window.db).catch((err) => {
-                console.warn("Firebase persistence error:", err.code);
-            });
-
             window.auth = getAuth(app);
             window.storage = getStorage(app);
 
             window.firebaseAPI = {
                 initializeApp, getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged,
                 db: window.db, auth: window.auth, storage: window.storage, firebaseConfig,
-                collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction, writeBatch, where,
+                collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction,
                 signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, createUserWithEmailAndPassword,
                 getStorage, ref, uploadString, getDownloadURL,
                 firebaseConfig
@@ -266,11 +261,6 @@
                                 title="Delete Selected">
                                 <i class="fa-solid fa-trash-can text-sm"></i>
                             </button>
-                            <button id="btn-bulk-restore" onclick="bulkRestoreSelected()"
-                                class="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
-                                title="Restore Selected">
-                                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
-                            </button>
                             <button id="btn-bulk-verify" onclick="bulkVerifySelected()"
                                 class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
                                 title="Verify Selected">
@@ -471,7 +461,7 @@
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
             }
 
-            let photoData = null, fullPhotoData = null, originalFileName = '', currentFileType = '', pendingUploadedDocument = null, draftServerRecordId = '', db = [], bin = [];
+            let photoData = null, originalFileName = '', currentFileType = '', pendingUploadedDocument = null, draftServerRecordId = '', db = [], bin = [];
             let isPendingBatch = false;
             let demoFallbackLoaded = false;
             let removeExistingDocument = false;
@@ -553,7 +543,104 @@
             const RECORD_UPDATES_KEY = 'student_updates_v1';
             const FORM_DRAFT_KEY = 'student_draft_v1';
 
+            // --- IndexedDB Wrapper & Offline Queue ---
+            const SchoolLocalDB = {
+                dbName: 'SchoolSystemDB',
+                version: 1,
+                init: function() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, this.version);
+                        request.onupgradeneeded = (e) => {
+                            const idb = e.target.result;
+                            if (!idb.objectStoreNames.contains('store')) {
+                                idb.createObjectStore('store');
+                            }
+                            if (!idb.objectStoreNames.contains('syncQueue')) {
+                                idb.createObjectStore('syncQueue', { keyPath: 'id' });
+                            }
+                        };
+                        request.onsuccess = (e) => resolve(e.target.result);
+                        request.onerror = (e) => reject(e.target.error);
+                    });
+                },
+                get: async function(key) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('store', 'readonly');
+                            const store = tx.objectStore('store');
+                            const req = store.get(key);
+                            req.onsuccess = () => resolve(req.result);
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { return null; }
+                },
+                set: async function(key, val) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('store', 'readwrite');
+                            const store = tx.objectStore('store');
+                            const req = store.put(val, key);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                enqueueSync: async function(record) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readwrite');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.put(record);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                dequeueSync: async function(id) {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readwrite');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.delete(id);
+                            req.onsuccess = () => resolve();
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { console.warn(e); }
+                },
+                getAllSyncQueue: async function() {
+                    try {
+                        const idb = await this.init();
+                        return await new Promise((resolve, reject) => {
+                            const tx = idb.transaction('syncQueue', 'readonly');
+                            const store = tx.objectStore('syncQueue');
+                            const req = store.getAll();
+                            req.onsuccess = () => resolve(req.result || []);
+                            req.onerror = () => reject(req.error);
+                        });
+                    } catch(e) { return []; }
+                }
+            };
 
+            window.addEventListener('online', async () => {
+                const queue = await SchoolLocalDB.getAllSyncQueue();
+                if (queue.length > 0) {
+                    showToast('<span class="material-symbols-outlined mr-2">cloud_upload</span> Syncing ' + queue.length + ' offline records...');
+                    for (const item of queue) {
+                        serverCallSilent(item.fn, [item.data], async () => {
+                            await SchoolLocalDB.dequeueSync(item.id);
+                            const idx = db.findIndex(x => x.id === item.id);
+                            if (idx > -1) {
+                                db[idx]._syncStatus = 'synced';
+                                if (currentTab === 'records') renderCurrentRecordsPage();
+                            }
+                        });
+                    }
+                }
+            });
             const AUTH_USER_KEY = 'student_auth_v1';
             const CONFIG_KEY = 'school_config_v1';
             const DEMO_RECORDS = [];
@@ -606,176 +693,56 @@
                 }
             }
             function serverCallSilent(fn, args, onSuccess, onFailure) {
-                serverCall(fn, args, onSuccess, onFailure);
+                if (!navigator.onLine && (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord')) {
+                    const rec = args[0];
+                    if (rec && rec.id) {
+                        SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
+                        if (onSuccess) onSuccess(rec);
+                        return;
+                    }
+                }
+                serverCall(fn, args, onSuccess, (err) => {
+                    if (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord') {
+                        const rec = args[0];
+                        if (rec && rec.id) {
+                            SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
+                            if (onSuccess) onSuccess(rec);
+                            return;
+                        }
+                    }
+                    if (onFailure) onFailure(err);
+                });
             }
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
                 const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
-                    if (fn === 'getFormFields') {
-                        const docRef = doc(window.db, "system", "formConfig");
-                        const snap = await getDoc(docRef);
-                        if (snap.exists() && snap.data().fb_fields) {
-                            if (onSuccess) onSuccess(snap.data().fb_fields);
-                        } else {
-                            if (onSuccess) onSuccess([]);
-                        }
-                    } else if (fn === 'saveFormFields') {
-                        const fields = args[0] || [];
-                        const docRef = doc(window.db, "system", "formConfig");
-                        await setDoc(docRef, { fb_fields: fields }, { merge: true });
-                        if (onSuccess) onSuccess();
-                    } else if (fn === 'getRecords') {
+                    if (fn === 'getRecords') {
                         if (window._recordsUnsubscribe) {
                             window._recordsUnsubscribe();
                         }
-                        const { where } = window.firebaseAPI;
-                        const userName = getCurrentUserName();
-                        const q = query(collection(window.db, "records"), where("createdBy", "==", userName));
-                        getDocs(q).then((querySnapshot) => {
+                        const q = query(collection(window.db, "records"), orderBy("updatedAt", "desc"));
+                        window._recordsUnsubscribe = onSnapshot(q, (querySnapshot) => {
                             const records = [];
                             querySnapshot.forEach((doc) => { records.push({ id: doc.id, ...doc.data() }); });
-                            records.sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                             if (onSuccess) onSuccess(records);
-                        }).catch((error) => {
-                            console.error("Firebase GetDocs Error:", error);
-                            if (onFailure) onFailure(error);
-                        });
-                    } else if (fn === 'bulkVerifyRecords') {
-                        const recordsToVerify = args[0];
-                        const { writeBatch, doc } = window.firebaseAPI;
-                        let chunks = [];
-                        for(let i=0; i<recordsToVerify.length; i+=500) {
-                            chunks.push(recordsToVerify.slice(i, i+500));
-                        }
-                        try {
-                            for(const chunk of chunks) {
-                                const batch = writeBatch(window.db);
-                                
-                                // Upload photos for this chunk first
-                                await Promise.all(chunk.map(async (data) => {
-                                    if (data.fullPhotoData && window.storage && window.firebaseAPI.uploadString) {
-                                        const { ref, uploadString, getDownloadURL } = window.firebaseAPI;
-                                        const storageRef = ref(window.storage, `student_photos/${data.id}.jpg`);
-                                        try {
-                                            await uploadString(storageRef, data.fullPhotoData, 'data_url');
-                                            data.docUrl = await getDownloadURL(storageRef);
-                                        } catch (e) {
-                                            console.error("Storage upload failed for", data.id, e);
-                                        }
-                                    }
-                                }));
-
-                                for(const item of chunk) {
-                                    const data = { ...item };
-                                    data.updatedAt = Date.now();
-                                    delete data.fullPhotoData;
-                                    const docRef = doc(window.db, "records", String(data.id));
-                                    batch.set(docRef, data, { merge: true });
-                                }
-                                await batch.commit();
-                            }
-                            if (onSuccess) onSuccess();
-                        } catch(error) {
-                            console.error("Batch verify error:", error);
-                            if(onFailure) onFailure(error);
-                        }
-                    } else if (fn === 'bulkDeleteRecords') {
-                        const idsToDelete = args[0];
-                        const { writeBatch, doc } = window.firebaseAPI;
-                        let chunks = [];
-                        for(let i=0; i<idsToDelete.length; i+=500) {
-                            chunks.push(idsToDelete.slice(i, i+500));
-                        }
-                        try {
-                            for(const chunk of chunks) {
-                                const batch = writeBatch(window.db);
-                                for(const id of chunk) {
-                                    batch.delete(doc(window.db, "records", String(id)));
-                                    batch.delete(doc(window.db, "records", String(id), "photoData", "main"));
-                                }
-                                await batch.commit();
-                            }
-                            if (onSuccess) onSuccess();
-                        } catch(error) {
-                            console.error("Batch delete error:", error);
-                            if(onFailure) onFailure(error);
-                        }
-                    } else if (fn === 'checkDuplicate') {
-                        const { sName, fName, cVal, currentEditId } = args[0];
-                        const { collection, query, where, getDocs } = window.firebaseAPI;
-                        // Query by class which is case-sensitive and standard dropdown
-                        const q = query(collection(window.db, "records"), where("sclass", "==", cVal));
-                        getDocs(q).then(snapshot => {
-                            let matches = [];
-                            snapshot.forEach(doc => {
-                                if (doc.id === currentEditId) return;
-                                const data = doc.data();
-                                if (data.isDeleted) return; // Ignore deleted records for duplicate check
-                                const rName = (data.studentName || '').trim().toLowerCase();
-                                const rFather = (data.fatherName || '').trim().toLowerCase();
-                                if (rName === sName.trim().toLowerCase() && rFather === fName.trim().toLowerCase()) {
-                                    matches.push({ id: doc.id, ...data });
-                                }
-                            });
-                            if (onSuccess) onSuccess(matches);
-                        }).catch(e => {
-                            console.error("Duplicate check error:", e);
-                            if (onFailure) onFailure(e);
+                        }, (error) => {
+                            console.error("Firebase Snapshot Error:", error);
                         });
                     } else if (fn === 'submitStudentData' || fn === 'addRecord') {
-                        const data = { ...args[0] };
+                        const data = args[0];
                         data.updatedAt = Date.now();
-                        
-                        const fullPhoto = data.fullPhotoData;
-                        delete data.fullPhotoData;
-
                         if (data.id && !String(data.id).startsWith('draft_') && !String(data.id).startsWith('TEMP_')) {
-                            if (fullPhoto && window.storage && window.firebaseAPI.uploadString) {
-                                try {
-                                    const { ref, uploadString, getDownloadURL } = window.firebaseAPI;
-                                    const storageRef = ref(window.storage, `student_photos/${data.id}.jpg`);
-                                    await uploadString(storageRef, fullPhoto, 'data_url');
-                                    data.docUrl = await getDownloadURL(storageRef);
-                                } catch(e) { console.error('Storage upload failed', e); }
-                            }
                             const docRef = doc(window.db, "records", String(data.id));
                             await setDoc(docRef, data);
                             if (onSuccess) onSuccess(data);
                         } else {
-                            if (fullPhoto && window.storage && window.firebaseAPI.uploadString) {
-                                try {
-                                    const { ref, uploadString, getDownloadURL } = window.firebaseAPI;
-                                    // Can't upload until we have ID, so we create doc first
-                                    const docRef = await addDoc(collection(window.db, "records"), data);
-                                    data.id = docRef.id;
-                                    const storageRef = ref(window.storage, `student_photos/${data.id}.jpg`);
-                                    await uploadString(storageRef, fullPhoto, 'data_url');
-                                    data.docUrl = await getDownloadURL(storageRef);
-                                    await setDoc(docRef, data, { merge: true });
-                                } catch(e) { console.error('Storage upload failed', e); }
-                            } else {
-                                const docRef = await addDoc(collection(window.db, "records"), data);
-                                data.id = docRef.id;
-                            }
-                            if (onSuccess) onSuccess(data);
+                            const docRef = await addDoc(collection(window.db, "records"), data);
+                            data.id = docRef.id;
                             if (onSuccess) onSuccess(data);
                         }
                     } else if (fn === 'updateStudentData' || fn === 'updateRecord') {
-                        const data = { ...args[0] };
+                        const data = args[0];
                         data.updatedAt = Date.now();
-                        
-                        const fullPhoto = data.fullPhotoData;
-                        delete data.fullPhotoData;
-
-                        if (fullPhoto && window.storage && window.firebaseAPI.uploadString) {
-                            try {
-                                const { ref, uploadString, getDownloadURL } = window.firebaseAPI;
-                                const storageRef = ref(window.storage, `student_photos/${data.id}.jpg`);
-                                await uploadString(storageRef, fullPhoto, 'data_url');
-                                data.docUrl = await getDownloadURL(storageRef);
-                            } catch(e) { console.error('Storage upload failed', e); }
-                        }
-
                         const docRef = doc(window.db, "records", String(data.id));
                         await setDoc(docRef, data, { merge: true });
                         
@@ -1911,6 +1878,7 @@
             }
 
             function idbGetAll(storeName) {
+                if (storeName === IDB_STORE_RECORDS) return Promise.resolve([]);
                 return new Promise((resolve, reject) => {
                     openIDB().then(db => {
                         const tx = db.transaction(storeName, 'readonly');
@@ -1923,6 +1891,7 @@
             }
 
             function idbGet(storeName, key) {
+                if (storeName === IDB_STORE_RECORDS) return Promise.resolve(null);
                 return new Promise((resolve, reject) => {
                     openIDB().then(db => {
                         const tx = db.transaction(storeName, 'readonly');
@@ -1935,6 +1904,7 @@
             }
 
             function idbDelete(storeName, key) {
+                if (storeName === IDB_STORE_RECORDS) return Promise.resolve();
                 return openIDB().then(db => {
                     return new Promise((res, rej) => {
                         const tx = db.transaction([storeName], 'readwrite');
@@ -2140,17 +2110,6 @@
             function loadAllData(done) {
                 console.log('[loadAllData] fetching fresh data from Firebase...');
                 
-                // Fetch Form Builder Configuration from Firebase
-                try {
-                    serverCallSilent('getFormFields', [], (serverFields) => {
-                        if (serverFields && Array.isArray(serverFields) && serverFields.length > 0) {
-                            fb_fields = serverFields;
-                            if (typeof fb_syncToAppData === 'function') fb_syncToAppData();
-                            if (typeof fb_renderForm === 'function') fb_renderForm();
-                        }
-                    });
-                } catch(e) { console.error('Error fetching form config', e); }
-
                 // Fetch from server directly without local cache
                 serverCallSilent('getRecords', [], (serverDb) => {
                     if (serverDb && Array.isArray(serverDb)) {
@@ -2163,34 +2122,20 @@
                             }
                         });
                         
-                        idbGetAll(IDB_STORE_RECORDS).then(localRecords => {
-                            const pendingLocal = (localRecords || []).filter(r => r._syncStatus === 'pending' || r.status === 'pending' || r.status === 'unverified' || !r.verified || String(r.verified).toLowerCase() === 'false');
-                            const memoryPending = (typeof db !== 'undefined' ? db : []).filter(r => r._pending || r._syncStatus === 'syncing' || r._syncStatus === 'pending');
-                            
-                            // Merge IDB and Memory pending
-                            memoryPending.forEach(m => {
-                                if (!pendingLocal.some(l => l.id === m.id)) pendingLocal.push(m);
-                            });
-
-                            const serverFiltered = filterDeletedFromList([...serverDb]);
-                            const mergedDb = serverFiltered.map(sRec => {
-                                const lRec = pendingLocal.find(l => String(l.id) === String(sRec.id) || (l.oldId && String(l.oldId) === String(sRec.id)));
-                                return lRec ? { ...sRec, ...lRec } : sRec;
-                            });
-                            pendingLocal.forEach(lRec => {
-                                if (!mergedDb.some(m => String(m.id) === String(lRec.id) || (m.oldId && String(m.oldId) === String(lRec.id)))) {
-                                    mergedDb.push(lRec);
-                                }
-                            });
-                            db = mergedDb;
-                            demoFallbackLoaded = false;
-                            refreshUiAfterLoad();
-                        }).catch(e => {
-                            console.error('Failed to load local drafts', e);
-                            db = filterDeletedFromList([...serverDb]);
-                            demoFallbackLoaded = false;
-                            refreshUiAfterLoad();
+                        const pendingLocal = (typeof db !== 'undefined' ? db : []).filter(r => r._pending || r._syncStatus === 'syncing' || r._syncStatus === 'pending');
+                        const serverFiltered = filterDeletedFromList([...serverDb]);
+                        const mergedDb = serverFiltered.map(sRec => {
+                            const lRec = pendingLocal.find(l => String(l.id) === String(sRec.id) || (l.oldId && String(l.oldId) === String(sRec.id)));
+                            return lRec ? { ...sRec, ...lRec } : sRec;
                         });
+                        pendingLocal.forEach(lRec => {
+                            if (!mergedDb.some(m => String(m.id) === String(lRec.id) || (m.oldId && String(m.oldId) === String(lRec.id)))) {
+                                mergedDb.push(lRec);
+                            }
+                        });
+                        db = mergedDb;
+                        demoFallbackLoaded = false;
+                        refreshUiAfterLoad();
                     }
                     if (typeof done === 'function') done();
                 });
@@ -3507,10 +3452,7 @@
                         deleted.deletedAt = new Date().toISOString();
                         storeRecordInDb(deleted);
                         try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, deleted).catch(()=>{}); } catch(e){}
-                        const isVerified = deleted.verified === true || String(deleted.verified).toLowerCase() === 'true' || deleted.verified === 'Completed';
-                        if (isVerified) {
-                            serverCallSilent('updateRecord', [deleted], ()=>{}, ()=>{});
-                        }
+                        serverCallSilent('updateRecord', [deleted], ()=>{}, ()=>{});
                         showToast('Record moved to Recycle Bin');
                         renderCurrentRecordsPage();
                         filterRecords();
@@ -3886,7 +3828,7 @@
                 if (document.getElementById('mainSearch')) document.getElementById('mainSearch').value = r.studentName || '';
                 if (document.getElementById('global-search')) document.getElementById('global-search').value = r.fatherName || '';
 
-                photoData = null; fullPhotoData = null;
+                photoData = null;
                 pendingUploadedDocument = null;
                 originalFileName = '';
                 currentFileType = '';
@@ -3895,7 +3837,7 @@
                     const img = document.getElementById('photo-preview-img');
                     const placeholder = document.getElementById('photo-placeholder-icon');
                     // Use fixDriveImageUrl to handle all Google Drive URL formats
-                    const resolvedUrl = fixDriveImageUrl(r._displayPhotoSrc || r.docUrl || r.photoData || '');
+                    const resolvedUrl = fixDriveImageUrl(r.docUrl || r.photoData || '');
                     if (img && resolvedUrl) {
                         img.src = resolvedUrl;
                         img.classList.remove('hidden');
@@ -3964,39 +3906,25 @@
                 const editId = editIdEl ? (editIdEl.value || '').trim() : '';
                 
                 if (!sNameVal || !fNameVal || !classVal) { lastDuplicatePromptKey = ''; return; }
+                const match = findAutofillCandidate(sNameVal, fNameVal, classVal, editId);
+                if (!match) { lastDuplicatePromptKey = ''; return; }
                 
-                let matches = [];
-                const lowerN = sNameVal.toLowerCase();
-                const lowerF = fNameVal.toLowerCase();
-                db.forEach(data => {
-                    if (String(data.id) === String(editId)) return;
-                    if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
-                    const rName = (data.studentName || '').trim().toLowerCase();
-                    const rFather = (data.fatherName || '').trim().toLowerCase();
-                    const rClass = data.sclass;
-                    if (rClass === classVal && rName === lowerN && rFather === lowerF) {
-                        matches.push(data);
-                    }
-                });
-
-                if (!matches || matches.length === 0) { lastDuplicatePromptKey = ''; return; }
-                    
-                    if (matches.length > 1) {
-                        const multiKey = `multi::${sNameVal}::${fNameVal}::${classVal}::${editId}`;
-                        if (lastDuplicatePromptKey === multiKey) return;
-                        lastDuplicatePromptKey = multiKey;
-                        setTimeout(() => { if (lastDuplicatePromptKey === multiKey) lastDuplicatePromptKey = ''; }, 600);
-                        showModal('error', 'Multiple Records Found', `Student: ${sNameVal}, Father: ${fNameVal}, Class: ${classVal} ke saath ${matches.length} records mil rahe hain.`);
-                        return;
-                    }
-                    const existing = matches[0];
-                    const promptKey = `exact::${String(existing.id || '').trim()}::${editId}`;
-                    if (lastDuplicatePromptKey === promptKey) return;
-                    lastDuplicatePromptKey = promptKey;
-                    setTimeout(() => { if (lastDuplicatePromptKey === promptKey) lastDuplicatePromptKey = ''; }, 600);
-                    const title = 'Existing Record Found';
-                    const msg = `Student: ${existing.studentName || '-'}\nFather: ${existing.fatherName || '-'}\nClass: ${existing.sclass || '-'}\n\nYe record pehle se maujood hai.\nKya aap is data ko autofill karna chahte hain?`;
-                    showModal('confirm', title, msg, () => { populateFormFromRecord(existing); showModal('success', 'Autofill Complete', 'Existing record form me load ho gaya.'); }, 'Yes, Autofill');
+                if (match.multiple) {
+                    const multiKey = `multi::${sNameVal}::${fNameVal}::${classVal}::${editId}`;
+                    if (lastDuplicatePromptKey === multiKey) return;
+                    lastDuplicatePromptKey = multiKey;
+                    setTimeout(() => { if (lastDuplicatePromptKey === multiKey) lastDuplicatePromptKey = ''; }, 600);
+                    showModal('error', 'Multiple Records Found', `Student: ${sNameVal}, Father: ${fNameVal}, Class: ${classVal} ke saath ${match.count} records mil rahe hain.`);
+                    return;
+                }
+                const existing = match.record;
+                const promptKey = `${match.mode}::${String(existing.id || '').trim()}::${editId}`;
+                if (lastDuplicatePromptKey === promptKey) return;
+                lastDuplicatePromptKey = promptKey;
+                setTimeout(() => { if (lastDuplicatePromptKey === promptKey) lastDuplicatePromptKey = ''; }, 600);
+                const title = 'Existing Record Found';
+                const msg = `Student: ${existing.studentName || '-'}\nFather: ${existing.fatherName || '-'}\nClass: ${existing.sclass || '-'}\n\nYe record pehle se maujood hai.\nKya aap is data ko autofill karna chahte hain?`;
+                showModal('confirm', title, msg, () => { populateFormFromRecord(existing); showModal('success', 'Autofill Complete', 'Existing record form me load ho gaya.'); }, 'Yes, Autofill');
             }
             function hasDraftFormContent() { return getFormFieldMap().some(k => { const el = document.getElementById('in-' + k); return el && String(el.value || '').trim() !== ''; }) || !!pendingUploadedDocument || !!originalFileName; }
             function buildFormRecordPayload(options = {}) {
@@ -4069,7 +3997,7 @@
                 } 
             }
             function resetUploadFieldLabel(textOverride) { const l = document.getElementById('photo-upload-label'), t = document.getElementById('upload-btn-text'); if (!t || !l) return; t.innerHTML = textOverride || 'Upload Student'; l.style.background = ''; l.style.borderColor = ''; }
-            function clearPendingUploadedDocument(deleteRemote = false) { const pending = pendingUploadedDocument; pendingUploadedDocument = null; photoData = null; fullPhotoData = null; if (deleteRemote && pending && pending.fileId) { serverCall('deleteDriveFile', [pending.fileId], () => { }, () => { }); } }
+            function clearPendingUploadedDocument(deleteRemote = false) { const pending = pendingUploadedDocument; pendingUploadedDocument = null; photoData = null; if (deleteRemote && pending && pending.fileId) { serverCall('deleteDriveFile', [pending.fileId], () => { }, () => { }); } }
             function showPhotoPreview(dataUrl) {
                 const img = document.getElementById('photo-preview-img');
                 const placeholder = document.getElementById('photo-placeholder');
@@ -4118,31 +4046,31 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     img.onload = () => {
-                        const canvasFull = document.createElement('canvas');
-                        let wF = img.width; let hF = img.height;
-                        const maxF = 800; // Full quality max dimension
-                        if (wF > hF && wF > maxF) { hF *= maxF / wF; wF = maxF; }
-                        else if (hF > maxF) { wF *= maxF / hF; hF = maxF; }
-                        canvasFull.width = wF; canvasFull.height = hF;
-                        const ctxFull = canvasFull.getContext('2d');
-                        ctxFull.drawImage(img, 0, 0, wF, hF);
-                        const fullDataUrl = canvasFull.toDataURL('image/jpeg', 0.6);
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const max = 800; // Reduced max dimension to ensure small base64 size
+                        if (width > height && width > max) {
+                            height *= max / width;
+                            width = max;
+                        } else if (height > max) {
+                            width *= max / height;
+                            height = max;
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        // Always convert to JPEG with 0.6 quality for maximum compression to fit in Firestore 1MB limit
+                        let dataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
-                        const canvasMicro = document.createElement('canvas');
-                        let wM = img.width; let hM = img.height;
-                        const maxM = 80; // Micro thumbnail max dimension
-                        if (wM > hM && wM > maxM) { hM *= maxM / wM; wM = maxM; }
-                        else if (hM > maxM) { wM *= maxM / hM; hM = maxM; }
-                        canvasMicro.width = wM; canvasMicro.height = hM;
-                        const ctxMicro = canvasMicro.getContext('2d');
-                        ctxMicro.drawImage(img, 0, 0, wM, hM);
-                        const microDataUrl = canvasMicro.toDataURL('image/jpeg', 0.4);
-
-                        fetch(fullDataUrl)
+                        // Convert back to file-like object for metadata
+                        fetch(dataUrl)
                             .then(res => res.blob())
                             .then(blob => {
                                 const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
-                                callback(compressedFile, microDataUrl, fullDataUrl);
+                                callback(compressedFile, dataUrl);
                             });
                     };
                     img.src = e.target.result;
@@ -4166,10 +4094,9 @@
                 if (!file.type.startsWith('image/')) return;
 
                 setUploadFieldProgress('Compressing...', 10, true);
-                compressImage(file, (compFile, microDataUrl, fullDataUrl) => {
-                    photoData = microDataUrl;
-                    fullPhotoData = fullDataUrl;
-                    showPhotoPreview(fullPhotoData);
+                compressImage(file, (compFile, dataUrl) => {
+                    photoData = dataUrl;
+                    showPhotoPreview(photoData);
                     originalFileName = compFile.name;
                     currentFileType = compFile.type;
 
@@ -4418,69 +4345,64 @@
                         nextSn = maxSn + 1;
                     }
 
-                    // Local duplicate check (instant, works offline)
-                    if (!proceedSave.bypassDuplicateCheck) {
-                        toggleSaveLoading(true);
-                        let matches = [];
-                        const lowerN = n.trim().toLowerCase();
-                        const lowerF = fatherVal.trim().toLowerCase();
-                        db.forEach(data => {
-                            if (String(data.id) === String(eid)) return;
-                            if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
-                            const rName = (data.studentName || '').trim().toLowerCase();
-                            const rFather = (data.fatherName || '').trim().toLowerCase();
-                            const rClass = data.sclass;
-                            if (rClass === cl && rName === lowerN && rFather === lowerF) {
-                                matches.push(data);
-                            }
+                    // Check duplicate record locally (Student Name, Father Name, Class)
+                    const nLower = n.trim().toLowerCase();
+                    const fatherLower = fatherVal.trim().toLowerCase();
+                    const clLower = cl.trim().toLowerCase();
+                    let duplicate = null;
+                    if (!eid) {
+                        duplicate = db.find(r => {
+                            if (typeof draftServerRecordId !== 'undefined' && draftServerRecordId && String(r.id) === String(draftServerRecordId)) return false;
+                            if (!nLower) return false;
+                            const rName = (r.studentName || '').trim().toLowerCase();
+                            const rFather = (r.fatherName || '').trim().toLowerCase();
+                            const rClass = (r.sclass || '').trim().toLowerCase();
+                            return rName === nLower && rFather === fatherLower && rClass === clLower;
                         });
-
-                        if (matches && matches.length > 0) {
-                            let duplicate = matches[0];
-                            isSavingRecord = false;
-                            toggleSaveLoading(false);
-                            showModal('confirm', 
-                                'Duplicate Entry Found!', 
-                                `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
-                                () => {
-                                    proceedSave.bypassDuplicateCheck = true;
-                                    proceedSave();
-                                }, 
-                                'Create New'
-                            );
-                            
-                            const actions = document.getElementById('modal-actions');
-                            if (actions) {
-                                actions.innerHTML = `
-                                    <div class="w-full flex flex-col gap-3">
-                                        <div class="flex gap-3 w-full">
-                                            <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
-                                            <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
-                                        </div>
-                                        <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
-                                    </div>
-                                `;
-                                
-                                document.getElementById('modal-load-old-btn').onclick = () => {
-                                    closeModal();
-                                    setBlankRecordMode('edit');
-                                    populateFormFromRecord(duplicate);
-                                };
-                                
-                                document.getElementById('modal-confirm-btn').onclick = () => {
-                                    closeModal();
-                                    proceedSave.bypassDuplicateCheck = true;
-                                    proceedSave();
-                                };
-                            }
-                            return; // Halts until user selects an option
-                        }
-                        
-                        proceedSave.bypassDuplicateCheck = true;
+                    }
+                    
+                    if (duplicate && !proceedSave.bypassDuplicateCheck) {
                         isSavingRecord = false;
-                        toggleSaveLoading(false);
-                        proceedSave();
-                        return; // Halt and re-enter without duplicate check
+                        showModal('confirm', 
+                            'Duplicate Entry Found!', 
+                            `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
+                            () => {
+                                proceedSave.bypassDuplicateCheck = true;
+                                proceedSave();
+                            }, 
+                            'Create New'
+                        );
+                        
+                        // Show close icon at top right
+                        const closeIcon = document.getElementById('modal-close-icon');
+                        if (closeIcon) closeIcon.classList.remove('hidden');
+
+                        // Customize modal actions to support "Open Existing", "Create New"
+                        const actions = document.getElementById('modal-actions');
+                        if (actions) {
+                            actions.innerHTML = `
+                                <div class="w-full flex flex-col gap-3">
+                                    <div class="flex gap-3 w-full">
+                                        <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
+                                        <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Bind "Load Old" button
+                            document.getElementById('modal-load-old-btn').onclick = () => {
+                                closeModal();
+                                populateFormFromRecord(duplicate);
+                            };
+                            
+                            // Bind "Phir bhi New" button
+                            document.getElementById('modal-confirm-btn').onclick = () => {
+                                closeModal();
+                                proceedSave.bypassDuplicateCheck = true;
+                                proceedSave();
+                            };
+                        }
+                        return;
                     }
                     proceedSave.bypassDuplicateCheck = false;
 
@@ -4514,7 +4436,6 @@
                         aadhar: getVal('aadhar'),
                         address: addressVal,
                         photoData: photoData ? photoData : (existing && !removeExistingDocument ? (existing.photoData || '') : ''),
-                        fullPhotoData: fullPhotoData ? fullPhotoData : null,
                         fileName: (photoData || pendingUploadedDocument) ? (finalId + '_' + n.replace(/\s+/g, '_') + '.jpg') : (existing ? (existing.fileName || '') : ''),
                         docFileId: (pendingUploadedDocument ? pendingUploadedDocument.fileId : (existing ? existing.docFileId : '')),
                         docUrl: (pendingUploadedDocument ? (pendingUploadedDocument.url || '') : (existing && !removeExistingDocument ? existing.docUrl : '')),
@@ -4562,7 +4483,7 @@
                         filterRecords();
                         const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
                         const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
-                        showToast(modalTitle, 'success');
+                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -4585,25 +4506,15 @@
                             }
                         } catch (e) { console.warn('IDB persist failed', e); }
                         
-                        // Push to Firebase instantly ONLY IF VERIFIED
-                        const isVerified = localRec.verified === true || String(localRec.verified).toLowerCase() === 'true' || localRec.verified === 'Completed';
-                        if (isVerified) {
-                            serverCallSilent('updateRecord', [localRec], () => {
-                                const updatedSource = db.find(r => r.id === localRec.id);
-                                if (updatedSource) {
-                                    updatedSource._serverSaved = true;
-                                    updatedSource._syncStatus = 'synced';
-                                    renderCurrentRecordsPage();
-                                }
-                            });
-                        } else {
+                        // Push to Firebase instantly
+                        serverCallSilent('updateRecord', [localRec], () => {
                             const updatedSource = db.find(r => r.id === localRec.id);
                             if (updatedSource) {
-                                updatedSource._serverSaved = false;
-                                updatedSource._syncStatus = 'pending';
+                                updatedSource._serverSaved = true;
+                                updatedSource._syncStatus = 'synced';
                                 renderCurrentRecordsPage();
                             }
-                        }
+                        });
                         
                         finalizeSave();
                     };
@@ -4670,7 +4581,7 @@
                     const verifyBtn = document.getElementById('btn-bulk-verify');
                     const identifyBtn = document.getElementById('btn-bulk-identify');
                     if (verifyBtn) {
-                        if (activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all' || activeStatusFilter === 'recycleBin') {
+                        if (activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all') {
                             verifyBtn.classList.add('hidden');
                         } else {
                             verifyBtn.classList.remove('hidden');
@@ -4678,16 +4589,7 @@
                     }
                     const exportBtn = document.getElementById('btn-bulk-export');
                     const deleteBtn = document.getElementById('btn-bulk-delete');
-                    const restoreBtn = document.getElementById('btn-bulk-restore');
                     
-                    if (restoreBtn) {
-                        if (activeStatusFilter === 'recycleBin') {
-                            restoreBtn.classList.remove('hidden');
-                        } else {
-                            restoreBtn.classList.add('hidden');
-                        }
-                    }
-
                     if (exportBtn) {
                         if (currentUser && currentUser.userId === 'admin' && activeStatusFilter === 'verified') {
                             exportBtn.classList.remove('hidden');
@@ -4696,7 +4598,7 @@
                         }
                     }
                     if (deleteBtn) {
-                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
+                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
                             deleteBtn.classList.remove('hidden');
                         } else {
                             deleteBtn.classList.add('hidden');
@@ -4807,7 +4709,6 @@
                 
                 showModal('confirm', 'Verify Selected?', `Are you sure you want to verify ${selectedRecords.size} records?`, async () => {
                     let updatedCount = 0;
-                    const recordsToUpdate = [];
                     for (const id of Array.from(selectedRecords)) {
                         const idx = db.findIndex(x => x.id === id);
                         if (idx !== -1 && !db[idx].verified) {
@@ -4815,19 +4716,19 @@
                             db[idx].verificationDate = new Date().toISOString();
                             db[idx].verifiedBy = getCurrentUserName();
                             db[idx].verifiedAt = Date.now();
-                            db[idx]._syncStatus = 'synced';
-                            db[idx]._pending = false;
-                            recordsToUpdate.push(db[idx]);
+                            db[idx]._syncStatus = 'syncing';
+                            db[idx]._pending = true;
+                            
+                            try {
+                                await syncVerifiedRecordToGoogle(db[idx]);
+                            } catch (e) {
+                                console.error('Error verifying record', id, e);
+                            }
                             updatedCount++;
                         }
                     }
 
                     if (updatedCount > 0) {
-                        try {
-                            serverCallSilent('bulkVerifyRecords', [recordsToUpdate], () => {}, () => {});
-                        } catch (e) {
-                            console.error('Error verifying records', e);
-                        }
                         
                         showToast(`${updatedCount} records verified!`);
                         selectedRecords.clear();
@@ -4837,35 +4738,9 @@
                 }, 'Yes, Verify');
             }
 
-            function bulkDeleteSelected() {
-                syncSelectedRecordsSection();
-                if (selectedRecords.size === 0) return;
-                
-                showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
-                    const idsToDelete = Array.from(selectedRecords);
-                    idsToDelete.forEach(id => {
-                        const rec = findRecordById(db, id);
-                        if(rec) {
-                            db = db.filter(r => r.id !== id);
-                            try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        }
-                    });
-                    
-                    const serverRecordsToDelete = db.filter(r => idsToDelete.includes(r.id) && (r.verified === true || String(r.verified).toLowerCase() === 'true' || r.verified === 'Completed'));
-                    if (serverRecordsToDelete.length > 0) {
-                        serverCallSilent('bulkVerifyRecords', [serverRecordsToDelete], ()=>{}, ()=>{});
-                    }
-                    showToast(`${idsToDelete.length} records deleted!`);
-                    selectedRecords.clear();
-                    filterRecords();
-                    renderHomeAnalysis();
-                }, 'Yes, Delete');
-            }
-
             function bulkRestoreSelected() {
                 syncSelectedRecordsSection();
                 if (selectedRecords.size === 0) return;
-                
                 const idsToRestore = Array.from(selectedRecords);
                 idsToRestore.forEach(id => {
                     const rec = findRecordById(db, id);
@@ -4876,11 +4751,34 @@
                         serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
                     }
                 });
-                
-                showToast(`${idsToRestore.length} records restored!`);
+                showToast(idsToRestore.length + ' records restored!');
                 selectedRecords.clear();
                 filterRecords();
                 renderHomeAnalysis();
+            }
+            function bulkDeleteSelected() {
+                syncSelectedRecordsSection();
+                if (selectedRecords.size === 0) return;
+                
+                showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
+                    const idsToDelete = Array.from(selectedRecords);
+                    idsToDelete.forEach(id => {
+                        const rec = findRecordById(db, id);
+                        if(rec) {
+                            rec.isDeleted = true;
+                            rec.deletedAt = new Date().toISOString();
+                            storeRecordInDb(rec);
+                            try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                            serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
+                        }
+                    });
+
+                    
+                    showToast(`${idsToDelete.length} records deleted!`);
+                    selectedRecords.clear();
+                    filterRecords();
+                    renderHomeAnalysis();
+                }, 'Yes, Delete');
             }
 
             function sendToIdentifyFromPreview() {
@@ -5459,8 +5357,10 @@
                     if (blankRecordMode === 'preview' && previewRecord) {
                         const rec = previewRecord;
                         const tsDisplay = getFormattedTimestamp(rec.updatedAt || rec.createdAt || new Date());
-                        // Best available photo: fullPhotoData > _displayPhotoSrc > docUrl > photoData
-                        const _bestPhotoSrc = rec.fullPhotoData || rec._displayPhotoSrc || (rec.docUrl ? fixDriveImageUrl(rec.docUrl) : null) || rec.photoData || '';
+                        // Best available photo: immediate dataUrl > _displayPhotoSrc > docUrl (fixed)
+                        const _bestPhotoSrc = (rec.photoData && rec.photoData.startsWith('data:image'))
+                            ? rec.photoData
+                            : (rec._displayPhotoSrc || fixDriveImageUrl(rec.docUrl || ''));
                         const hasDoc = (_bestPhotoSrc && _bestPhotoSrc.length > 10);
                         const docRes = _bestPhotoSrc;
                         const isReturned = (rec.isDeleted || String(rec.verified).toLowerCase() === 'returned' || String(rec.status).toLowerCase() === 'returned' || rec.returned === true || String(rec.returned).toLowerCase() === 'true');
@@ -6235,29 +6135,13 @@
                         <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
                     </div>
                 </div>
-                <div class="px-4 flex flex-col items-end justify-center gap-1 min-w-[80px] record-selection-zone" data-id="${x.id}" data-hasdoc="${hasDoc}">
-                    <div class="flex items-center gap-2">
-                        <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
-                        ${(selectedRecords.size > 0) ? `
-                        <div class="bulk-cb w-[18px] h-[18px] rounded-md border-2 ${selectedRecords.has(String(x.id)) ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'} flex items-center justify-center transition-all" data-id="${x.id}">
-                            <i class="${selectedRecords.has(String(x.id)) ? 'fa-solid fa-check text-[10px] text-white' : ''}"></i>
-                        </div>
-                        ` : ''}
-                    </div>
-                    <div class="flex items-center gap-1.5 opacity-60">
-                        ${selectedRecords.size === 0 ? `
-                        <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
-                            <span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
-                        </button>
-                        <button onclick="event.stopPropagation(); permDeleteRecordFromBin('${x.id}')" class="w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
-                            <i class="fa-solid fa-trash-can text-[11px]"></i>
-                        </button>
-                        ` : ''}
-                        ${x.isDeleted ? '<i class="fa-solid fa-trash-can-arrow-up text-red-500 text-[12px]" title="Deleted by Admin"></i>' : ''}
-                        ${syncIconStatusHtml}
-                        ${isRecVerified ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">verified</span>' : ''}
-                        ${isRecVerified ? '' : (hasDoc ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">unpublished</span>' : '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">no_photography</span>')}
-                    </div>
+                <div class="px-4 flex items-center justify-end gap-3 min-w-[80px]">
+                    <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
+                        <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
+                    </button>
+                    <button onclick="event.stopPropagation(); permDeleteRecordFromBin('${x.id}')" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
+                        <i class="fa-solid fa-trash-can text-[14px]"></i>
+                    </button>
                 </div>
             </div>`;
                     } else {
@@ -6795,7 +6679,8 @@
                 const nowTs = Date.now();
                 
                 // Instant feedback & clear form
-                showToast((localRec.studentName || 'Record') + ' Verified Successfully'); 
+                showToast((localRec.studentName || 'Record') + ' Verified Successfully');
+                setChipFilter('status', 'verified'); 
                 previewRecord.verified = true;
                 
                 const idxSync = db.findIndex(x => x.id === localRec.id);
@@ -7028,28 +6913,27 @@
                     draftServerRecordId = '';
                 }
 
-                showToast(modalTitle, 'success');
-                const currentRec = previewRecord;
-                isPreviewFromSave = false;
-                isPendingBatch = false;
-                resetForm(true); 
-                
-                if (currentRec) {
-                    previewRecord = currentRec;
-                    const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
-                    const currentIndex = list.findIndex(r => r.id === previewRecord.id);
-                    if (currentIndex >= 0 && currentIndex < list.length - 1) {
-                        openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
-                        return;
-                    } else {
-                        showToast("You have reached the end.");
+                showModal('success', modalTitle, '', () => {
+                    const currentRec = previewRecord;
+                    isPreviewFromSave = false;
+                    isPendingBatch = false;
+                    resetForm(true); 
+                    
+                    if (currentRec) {
+                        previewRecord = currentRec;
+                        const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
+                        const currentIndex = list.findIndex(r => r.id === previewRecord.id);
+                        if (currentIndex >= 0 && currentIndex < list.length - 1) {
+                            openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
+                            return;
+                        } else {
+                            showToast("You have reached the end.");
+                        }
                     }
-                }
-                
-                previewRecord = null;
-                closeStudentForm(); 
-                closeStudentDetailPopup();
-                filterRecords();
+                    
+                    previewRecord = null;
+                    closeStudentForm(); 
+                }, 'Yes, Delete', `${studentName}'s Data`);
             }
 
             function syncDatabase() {
@@ -7083,7 +6967,8 @@
 
             function deleteFromPreview() {
                 if (!previewRecord || !previewRecord.id) return;
-                const id = previewRecord.id;
+                showModal('confirm', 'Delete Record?', 'Are you sure you want to delete this previewed record?', () => {
+                    const id = previewRecord.id;
                     const deleted = previewRecord;
                     addActivity('DELETE', deleted);
 
@@ -7101,9 +6986,11 @@
 
                     const rec = findRecordById(db, id);
                     if(rec) {
-                        db = db.filter(r => r.id !== id);
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
+                        rec.isDeleted = true;
+                        rec.deletedAt = new Date().toISOString();
+                        storeRecordInDb(rec);
+                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                        serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
                     }
                     showToast('Record removed successfully');
 
@@ -7311,19 +7198,6 @@
                 // Ensure smooth scroll to top of the preview
                 const mainScroll = document.querySelector('.system-scroll');
                 if (mainScroll) mainScroll.scrollTop = 0;
-
-                // Fetch full photo on demand for Dual Image Strategy
-                if (rec && rec.id && window.firebaseAPI && window.db && (!rec.photoData || rec.photoData.length < 50000)) {
-                    const { doc, getDoc } = window.firebaseAPI;
-                    getDoc(doc(window.db, "records", String(rec.id), "photoData", "main")).then(snap => {
-                        if (snap.exists() && snap.data().fullPhotoData) {
-                            rec._displayPhotoSrc = snap.data().fullPhotoData;
-                            if (previewRecord && previewRecord.id === rec.id && blankRecordMode === 'preview') {
-                                renderCurrentRecordsPage();
-                            }
-                        }
-                    }).catch(e => console.error("Error fetching full photo:", e));
-                }
             }
 
             function closeStudentDetailPopup() {
@@ -8953,15 +8827,10 @@
                     height: 800,
                 });
                 if (canvas) {
-                    const fullDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                    const microCanvas = document.createElement('canvas');
-                    microCanvas.width = 60; microCanvas.height = 80;
-                    microCanvas.getContext('2d').drawImage(canvas, 0, 0, 60, 80);
-                    const microDataUrl = microCanvas.toDataURL('image/jpeg', 0.4);
-                    
-                    fullPhotoData = fullDataUrl;
-                    photoData = microDataUrl;
-                    showPhotoPreview(fullPhotoData);
+                    // Use 0.6 quality to ensure base64 image fits comfortably in Firestore 1MB limit
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    photoData = dataUrl;
+                    showPhotoPreview(photoData);
                     if (typeof queueServerDraftSync === 'function') queueServerDraftSync();
                     renderCurrentRecordsPage();
                 }
@@ -9327,8 +9196,7 @@
                 
                 record.id = 'draft_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + i;
                 db.unshift(record);
-                try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, record).catch(()=>{}); } catch(e){}
-                // serverCallSilent('addRecord', [record], ()=>{}, ()=>{});
+                serverCallSilent('addRecord', [record], ()=>{}, ()=>{});
                 importCount++;
             }
             
@@ -9345,7 +9213,7 @@
         }
     }
 
-    let tempPreviewPhotoData = null, tempPreviewFullPhotoData = null;
+    let tempPreviewPhotoData = null;
 
     window.openPreviewPhotoActionModal = function() {
         if (!previewRecord) return;
@@ -9384,9 +9252,8 @@
             const file = e.target.files[0];
             if (!file) return;
             setUploadFieldProgress('Compressing...', 10, true);
-            compressImage(file, (compFile, microDataUrl, fullDataUrl) => {
-                tempPreviewPhotoData = microDataUrl;
-                tempPreviewFullPhotoData = fullDataUrl;
+            compressImage(file, (compFile, dataUrl) => {
+                tempPreviewPhotoData = dataUrl;
                 showPreviewPhotoOptionsModal();
             });
         };
@@ -9403,12 +9270,12 @@
         document.getElementById('modal-msg').textContent = 'What would you like to do with this photo?';
         
         iconDiv.className = "w-32 h-32 rounded-xl mx-auto mb-4 flex items-center justify-center overflow-hidden border-2 border-emerald-100 bg-black";
-        iconDiv.innerHTML = `<img src="${tempPreviewFullPhotoData || tempPreviewPhotoData}" class="w-full h-full object-contain">`;
+        iconDiv.innerHTML = `<img src="${tempPreviewPhotoData}" class="w-full h-full object-contain">`;
         
         actions.innerHTML = `
             <button onclick="closeModal(); openPreviewCropModal();" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 text-[13px]"><i class="fa-solid fa-crop-simple mr-1"></i> Crop</button>
             <button onclick="closeModal(); savePreviewPopupPhoto();" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-[13px]"><i class="fa-solid fa-check mr-1"></i> Save</button>
-            <button onclick="closeModal(); tempPreviewPhotoData = null; tempPreviewFullPhotoData = null; openPreviewPhotoActionModal();" class="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 text-[13px]"><i class="fa-solid fa-trash mr-1"></i> Delete</button>
+            <button onclick="closeModal(); tempPreviewPhotoData = null; openPreviewPhotoActionModal();" class="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 text-[13px]"><i class="fa-solid fa-trash mr-1"></i> Delete</button>
         `;
     };
 
@@ -9435,14 +9302,7 @@
             if (!window.cropperInstance) return;
             const canvas = window.cropperInstance.getCroppedCanvas({ width: 600, height: 800 });
             if (canvas) {
-                const fullDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                const microCanvas = document.createElement('canvas');
-                microCanvas.width = 60; microCanvas.height = 80;
-                microCanvas.getContext('2d').drawImage(canvas, 0, 0, 60, 80);
-                const microDataUrl = microCanvas.toDataURL('image/jpeg', 0.4);
-
-                tempPreviewPhotoData = microDataUrl;
-                tempPreviewFullPhotoData = fullDataUrl;
+                tempPreviewPhotoData = canvas.toDataURL('image/jpeg', 0.6);
             }
             // Restore original functions
             window.applyCrop = originalApplyCrop;
@@ -9463,10 +9323,9 @@
     window.savePreviewPopupPhoto = function() {
         if (!previewRecord || !tempPreviewPhotoData) return;
         
-        previewRecord.docUrl = tempPreviewFullPhotoData || tempPreviewPhotoData;
+        previewRecord.docUrl = tempPreviewPhotoData;
         previewRecord.photoData = tempPreviewPhotoData;
-        previewRecord.fullPhotoData = tempPreviewFullPhotoData;
-        previewRecord._displayPhotoSrc = tempPreviewFullPhotoData || tempPreviewPhotoData;
+        previewRecord._displayPhotoSrc = tempPreviewPhotoData;
         
         // Move to unverified section
         previewRecord.verified = false;
@@ -9478,7 +9337,7 @@
         
         showToast('Photo saved. Card moved to Unverified.');
         
-        tempPreviewPhotoData = null; tempPreviewFullPhotoData = null;
+        tempPreviewPhotoData = null;
         setBlankRecordMode('none');
         renderCurrentRecordsPage();
     };
