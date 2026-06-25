@@ -2815,13 +2815,13 @@
             }
             function setBlankRecordMode(mode = 'none') {
                 const filterRow = document.getElementById('class-filter-row');
-                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
+                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const search = document.getElementById('mainSearch');
                 const searchIcon = document.getElementById('search-icon');
                 const info = document.getElementById('records-page-info-db');
                 const altInfo = document.getElementById('records-page-info-db');
-                if (!filterRow || !icon || !btn || !search || !searchIcon || !info) return;
+                if (!filterRow || !btn || !search || !searchIcon || !info) return;
 
                 closeAllMenus();
                 blankRecordMode = mode;
@@ -2876,9 +2876,9 @@
                 const isAnyMode = mode !== 'none';
                 
                 if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
-                    icon.className = 'fa-solid fa-arrow-left';
+                    if (icon) icon.className = 'fa-solid fa-arrow-left';
                 } else {
-                    icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
+                    if (icon) icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
                 }
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
@@ -3166,8 +3166,8 @@
             let filterDebounceTimer = null;
             function onSearchInput() {
                 const search = document.getElementById('mainSearch');
-                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
+                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const wrapper = document.getElementById('form-scroll-wrapper');
 
                 if (!search || !icon || !btn) return;
