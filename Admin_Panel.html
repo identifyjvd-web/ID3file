@@ -3246,7 +3246,7 @@
                                 const snVal = r.sn || (index + 1);
                                 return si + String(snVal).padStart(2, '0');
                             } else {
-                                return si + 'DRAFT';
+                                return si + 'DRAFT_' + String(r.createdAt || Date.now()).slice(-6);
                             }
                         })(),
                         'Id No': r.id || '',
@@ -5501,7 +5501,7 @@
                                             const snVal = rec.sn || '0';
                                             return si + String(snVal).padStart(2, '0');
                                         } else {
-                                            return si + 'DRAFT';
+                                            return si + 'DRAFT_' + String(rec.createdAt || Date.now()).slice(-6);
                                         }
                                     })() }</div>
                                 </div>
@@ -6413,8 +6413,7 @@
                             r.updatedAt = Date.now();
                             r.updatedBy = getCurrentUserName();
                             
-                            
-                            
+                            serverCallSilent('updateRecord', [r]);
                             
                             pendingHighlightId = r.id;
                             renderHomeAnalysis();
