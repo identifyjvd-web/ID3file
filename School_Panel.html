@@ -266,6 +266,11 @@
                                 title="Delete Selected">
                                 <i class="fa-solid fa-trash-can text-sm"></i>
                             </button>
+                            <button id="btn-bulk-restore" onclick="bulkRestoreSelected()"
+                                class="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
+                                title="Restore Selected">
+                                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
+                            </button>
                             <button id="btn-bulk-verify" onclick="bulkVerifySelected()"
                                 class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
                                 title="Verify Selected">
@@ -606,7 +611,20 @@
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
                 const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
-                    if (fn === 'getRecords') {
+                    if (fn === 'getFormFields') {
+                        const docRef = doc(window.db, "system", "formConfig");
+                        const snap = await getDoc(docRef);
+                        if (snap.exists() && snap.data().fb_fields) {
+                            if (onSuccess) onSuccess(snap.data().fb_fields);
+                        } else {
+                            if (onSuccess) onSuccess([]);
+                        }
+                    } else if (fn === 'saveFormFields') {
+                        const fields = args[0] || [];
+                        const docRef = doc(window.db, "system", "formConfig");
+                        await setDoc(docRef, { fb_fields: fields }, { merge: true });
+                        if (onSuccess) onSuccess();
+                    } else if (fn === 'getRecords') {
                         if (window._recordsUnsubscribe) {
                             window._recordsUnsubscribe();
                         }
@@ -647,7 +665,8 @@
                                     }
                                 }));
 
-                                for(const data of chunk) {
+                                for(const item of chunk) {
+                                    const data = { ...item };
                                     data.updatedAt = Date.now();
                                     delete data.fullPhotoData;
                                     const docRef = doc(window.db, "records", String(data.id));
@@ -704,7 +723,7 @@
                             if (onFailure) onFailure(e);
                         });
                     } else if (fn === 'submitStudentData' || fn === 'addRecord') {
-                        const data = args[0];
+                        const data = { ...args[0] };
                         data.updatedAt = Date.now();
                         
                         const fullPhoto = data.fullPhotoData;
@@ -742,7 +761,7 @@
                             if (onSuccess) onSuccess(data);
                         }
                     } else if (fn === 'updateStudentData' || fn === 'updateRecord') {
-                        const data = args[0];
+                        const data = { ...args[0] };
                         data.updatedAt = Date.now();
                         
                         const fullPhoto = data.fullPhotoData;
@@ -2121,6 +2140,17 @@
             function loadAllData(done) {
                 console.log('[loadAllData] fetching fresh data from Firebase...');
                 
+                // Fetch Form Builder Configuration from Firebase
+                try {
+                    serverCallSilent('getFormFields', [], (serverFields) => {
+                        if (serverFields && Array.isArray(serverFields) && serverFields.length > 0) {
+                            fb_fields = serverFields;
+                            if (typeof fb_syncToAppData === 'function') fb_syncToAppData();
+                            if (typeof fb_renderForm === 'function') fb_renderForm();
+                        }
+                    });
+                } catch(e) { console.error('Error fetching form config', e); }
+
                 // Fetch from server directly without local cache
                 serverCallSilent('getRecords', [], (serverDb) => {
                     if (serverDb && Array.isArray(serverDb)) {
@@ -3935,8 +3965,21 @@
                 
                 if (!sNameVal || !fNameVal || !classVal) { lastDuplicatePromptKey = ''; return; }
                 
-                serverCallSilent('checkDuplicate', [{ sName: sNameVal, fName: fNameVal, cVal: classVal, currentEditId: editId }], (matches) => {
-                    if (!matches || matches.length === 0) { lastDuplicatePromptKey = ''; return; }
+                let matches = [];
+                const lowerN = sNameVal.toLowerCase();
+                const lowerF = fNameVal.toLowerCase();
+                db.forEach(data => {
+                    if (String(data.id) === String(editId)) return;
+                    if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
+                    const rName = (data.studentName || '').trim().toLowerCase();
+                    const rFather = (data.fatherName || '').trim().toLowerCase();
+                    const rClass = data.sclass;
+                    if (rClass === classVal && rName === lowerN && rFather === lowerF) {
+                        matches.push(data);
+                    }
+                });
+
+                if (!matches || matches.length === 0) { lastDuplicatePromptKey = ''; return; }
                     
                     if (matches.length > 1) {
                         const multiKey = `multi::${sNameVal}::${fNameVal}::${classVal}::${editId}`;
@@ -3954,7 +3997,6 @@
                     const title = 'Existing Record Found';
                     const msg = `Student: ${existing.studentName || '-'}\nFather: ${existing.fatherName || '-'}\nClass: ${existing.sclass || '-'}\n\nYe record pehle se maujood hai.\nKya aap is data ko autofill karna chahte hain?`;
                     showModal('confirm', title, msg, () => { populateFormFromRecord(existing); showModal('success', 'Autofill Complete', 'Existing record form me load ho gaya.'); }, 'Yes, Autofill');
-                });
             }
             function hasDraftFormContent() { return getFormFieldMap().some(k => { const el = document.getElementById('in-' + k); return el && String(el.value || '').trim() !== ''; }) || !!pendingUploadedDocument || !!originalFileName; }
             function buildFormRecordPayload(options = {}) {
@@ -4376,59 +4418,69 @@
                         nextSn = maxSn + 1;
                     }
 
-                    // Server-side duplicate check
+                    // Local duplicate check (instant, works offline)
                     if (!proceedSave.bypassDuplicateCheck) {
                         toggleSaveLoading(true);
-                        serverCall('checkDuplicate', [{ sName: n, fName: fatherVal, cVal: cl, currentEditId: eid }], (matches) => {
-                            if (matches && matches.length > 0) {
-                                let duplicate = matches[0];
-                                isSavingRecord = false;
-                                toggleSaveLoading(false);
-                                showModal('confirm', 
-                                    'Duplicate Entry Found!', 
-                                    `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
-                                    () => {
-                                        proceedSave.bypassDuplicateCheck = true;
-                                        proceedSave();
-                                    }, 
-                                    'Create New'
-                                );
-                                
-                                const actions = document.getElementById('modal-actions');
-                                if (actions) {
-                                    actions.innerHTML = `
-                                        <div class="w-full flex flex-col gap-3">
-                                            <div class="flex gap-3 w-full">
-                                                <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
-                                                <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
-                                            </div>
-                                            <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
-                                        </div>
-                                    `;
-                                    
-                                    document.getElementById('modal-load-old-btn').onclick = () => {
-                                        closeModal();
-                                        setBlankRecordMode('edit');
-                                        populateFormFromRecord(duplicate);
-                                    };
-                                    
-                                    document.getElementById('modal-confirm-btn').onclick = () => {
-                                        closeModal();
-                                        proceedSave.bypassDuplicateCheck = true;
-                                        proceedSave();
-                                    };
-                                }
-                            } else {
-                                proceedSave.bypassDuplicateCheck = true;
-                                proceedSave();
+                        let matches = [];
+                        const lowerN = n.trim().toLowerCase();
+                        const lowerF = fatherVal.trim().toLowerCase();
+                        db.forEach(data => {
+                            if (String(data.id) === String(eid)) return;
+                            if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
+                            const rName = (data.studentName || '').trim().toLowerCase();
+                            const rFather = (data.fatherName || '').trim().toLowerCase();
+                            const rClass = data.sclass;
+                            if (rClass === cl && rName === lowerN && rFather === lowerF) {
+                                matches.push(data);
                             }
-                        }, () => {
-                            // On failure, bypass the check to ensure they can still save
-                            toggleSaveLoading(false);
-                            proceedSave.bypassDuplicateCheck = true;
-                            proceedSave();
                         });
-                        return;
+
+                        if (matches && matches.length > 0) {
+                            let duplicate = matches[0];
+                            isSavingRecord = false;
+                            toggleSaveLoading(false);
+                            showModal('confirm', 
+                                'Duplicate Entry Found!', 
+                                `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
+                                () => {
+                                    proceedSave.bypassDuplicateCheck = true;
+                                    proceedSave();
+                                }, 
+                                'Create New'
+                            );
+                            
+                            const actions = document.getElementById('modal-actions');
+                            if (actions) {
+                                actions.innerHTML = `
+                                    <div class="w-full flex flex-col gap-3">
+                                        <div class="flex gap-3 w-full">
+                                            <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
+                                            <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
+                                        </div>
+                                        <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
+                                    </div>
+                                `;
+                                
+                                document.getElementById('modal-load-old-btn').onclick = () => {
+                                    closeModal();
+                                    setBlankRecordMode('edit');
+                                    populateFormFromRecord(duplicate);
+                                };
+                                
+                                document.getElementById('modal-confirm-btn').onclick = () => {
+                                    closeModal();
+                                    proceedSave.bypassDuplicateCheck = true;
+                                    proceedSave();
+                                };
+                            }
+                            return; // Halts until user selects an option
+                        }
+                        
+                        proceedSave.bypassDuplicateCheck = true;
+                        isSavingRecord = false;
+                        toggleSaveLoading(false);
+                        proceedSave();
+                        return; // Halt and re-enter without duplicate check
                     }
                     proceedSave.bypassDuplicateCheck = false;
 
@@ -4510,7 +4562,7 @@
                         filterRecords();
                         const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
                         const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
-                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                        showToast(modalTitle, 'success');
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -4611,14 +4663,14 @@
 
                 const count = selectedRecords.size;
 
-                if (count > 0 && (activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all')))) {
+                if (count > 0 && (activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all')))) {
                     if (bulkContainer) bulkContainer.classList.remove('hidden');
                     if (bulkContainer) bulkContainer.classList.add('flex');
                     
                     const verifyBtn = document.getElementById('btn-bulk-verify');
                     const identifyBtn = document.getElementById('btn-bulk-identify');
                     if (verifyBtn) {
-                        if (activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all') {
+                        if (activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all' || activeStatusFilter === 'recycleBin') {
                             verifyBtn.classList.add('hidden');
                         } else {
                             verifyBtn.classList.remove('hidden');
@@ -4626,7 +4678,16 @@
                     }
                     const exportBtn = document.getElementById('btn-bulk-export');
                     const deleteBtn = document.getElementById('btn-bulk-delete');
+                    const restoreBtn = document.getElementById('btn-bulk-restore');
                     
+                    if (restoreBtn) {
+                        if (activeStatusFilter === 'recycleBin') {
+                            restoreBtn.classList.remove('hidden');
+                        } else {
+                            restoreBtn.classList.add('hidden');
+                        }
+                    }
+
                     if (exportBtn) {
                         if (currentUser && currentUser.userId === 'admin' && activeStatusFilter === 'verified') {
                             exportBtn.classList.remove('hidden');
@@ -4635,7 +4696,7 @@
                         }
                     }
                     if (deleteBtn) {
-                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
+                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
                             deleteBtn.classList.remove('hidden');
                         } else {
                             deleteBtn.classList.add('hidden');
@@ -4785,10 +4846,8 @@
                     idsToDelete.forEach(id => {
                         const rec = findRecordById(db, id);
                         if(rec) {
-                            rec.isDeleted = true;
-                            rec.deletedAt = new Date().toISOString();
-                            storeRecordInDb(rec);
-                            try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                            db = db.filter(r => r.id !== id);
+                            try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                         }
                     });
                     
@@ -4801,6 +4860,27 @@
                     filterRecords();
                     renderHomeAnalysis();
                 }, 'Yes, Delete');
+            }
+
+            function bulkRestoreSelected() {
+                syncSelectedRecordsSection();
+                if (selectedRecords.size === 0) return;
+                
+                const idsToRestore = Array.from(selectedRecords);
+                idsToRestore.forEach(id => {
+                    const rec = findRecordById(db, id);
+                    if (rec) {
+                        rec.isDeleted = false;
+                        rec.isRestored = true;
+                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
+                        serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
+                    }
+                });
+                
+                showToast(`${idsToRestore.length} records restored!`);
+                selectedRecords.clear();
+                filterRecords();
+                renderHomeAnalysis();
             }
 
             function sendToIdentifyFromPreview() {
@@ -5379,10 +5459,8 @@
                     if (blankRecordMode === 'preview' && previewRecord) {
                         const rec = previewRecord;
                         const tsDisplay = getFormattedTimestamp(rec.updatedAt || rec.createdAt || new Date());
-                        // Best available photo: immediate dataUrl > _displayPhotoSrc > docUrl (fixed)
-                        const _bestPhotoSrc = (rec.photoData && rec.photoData.startsWith('data:image'))
-                            ? rec.photoData
-                            : (rec._displayPhotoSrc || fixDriveImageUrl(rec.docUrl || ''));
+                        // Best available photo: fullPhotoData > _displayPhotoSrc > docUrl > photoData
+                        const _bestPhotoSrc = rec.fullPhotoData || rec._displayPhotoSrc || (rec.docUrl ? fixDriveImageUrl(rec.docUrl) : null) || rec.photoData || '';
                         const hasDoc = (_bestPhotoSrc && _bestPhotoSrc.length > 10);
                         const docRes = _bestPhotoSrc;
                         const isReturned = (rec.isDeleted || String(rec.verified).toLowerCase() === 'returned' || String(rec.status).toLowerCase() === 'returned' || rec.returned === true || String(rec.returned).toLowerCase() === 'true');
@@ -6157,13 +6235,29 @@
                         <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
                     </div>
                 </div>
-                <div class="px-4 flex items-center justify-end gap-3 min-w-[80px]">
-                    <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
-                        <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
-                    </button>
-                    <button onclick="event.stopPropagation(); permDeleteRecordFromBin('${x.id}')" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
-                        <i class="fa-solid fa-trash-can text-[14px]"></i>
-                    </button>
+                <div class="px-4 flex flex-col items-end justify-center gap-1 min-w-[80px] record-selection-zone" data-id="${x.id}" data-hasdoc="${hasDoc}">
+                    <div class="flex items-center gap-2">
+                        <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
+                        ${(selectedRecords.size > 0) ? `
+                        <div class="bulk-cb w-[18px] h-[18px] rounded-md border-2 ${selectedRecords.has(String(x.id)) ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'} flex items-center justify-center transition-all" data-id="${x.id}">
+                            <i class="${selectedRecords.has(String(x.id)) ? 'fa-solid fa-check text-[10px] text-white' : ''}"></i>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="flex items-center gap-1.5 opacity-60">
+                        ${selectedRecords.size === 0 ? `
+                        <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
+                            <span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
+                        </button>
+                        <button onclick="event.stopPropagation(); permDeleteRecordFromBin('${x.id}')" class="w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
+                            <i class="fa-solid fa-trash-can text-[11px]"></i>
+                        </button>
+                        ` : ''}
+                        ${x.isDeleted ? '<i class="fa-solid fa-trash-can-arrow-up text-red-500 text-[12px]" title="Deleted by Admin"></i>' : ''}
+                        ${syncIconStatusHtml}
+                        ${isRecVerified ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">verified</span>' : ''}
+                        ${isRecVerified ? '' : (hasDoc ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">unpublished</span>' : '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">no_photography</span>')}
+                    </div>
                 </div>
             </div>`;
                     } else {
@@ -6701,8 +6795,7 @@
                 const nowTs = Date.now();
                 
                 // Instant feedback & clear form
-                showToast((localRec.studentName || 'Record') + ' Verified Successfully');
-                setChipFilter('status', 'verified'); 
+                showToast((localRec.studentName || 'Record') + ' Verified Successfully'); 
                 previewRecord.verified = true;
                 
                 const idxSync = db.findIndex(x => x.id === localRec.id);
@@ -6935,27 +7028,28 @@
                     draftServerRecordId = '';
                 }
 
-                showModal('success', modalTitle, '', () => {
-                    const currentRec = previewRecord;
-                    isPreviewFromSave = false;
-                    isPendingBatch = false;
-                    resetForm(true); 
-                    
-                    if (currentRec) {
-                        previewRecord = currentRec;
-                        const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
-                        const currentIndex = list.findIndex(r => r.id === previewRecord.id);
-                        if (currentIndex >= 0 && currentIndex < list.length - 1) {
-                            openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
-                            return;
-                        } else {
-                            showToast("You have reached the end.");
-                        }
+                showToast(modalTitle, 'success');
+                const currentRec = previewRecord;
+                isPreviewFromSave = false;
+                isPendingBatch = false;
+                resetForm(true); 
+                
+                if (currentRec) {
+                    previewRecord = currentRec;
+                    const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
+                    const currentIndex = list.findIndex(r => r.id === previewRecord.id);
+                    if (currentIndex >= 0 && currentIndex < list.length - 1) {
+                        openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
+                        return;
+                    } else {
+                        showToast("You have reached the end.");
                     }
-                    
-                    previewRecord = null;
-                    closeStudentForm(); 
-                }, 'Yes, Delete', `${studentName}'s Data`);
+                }
+                
+                previewRecord = null;
+                closeStudentForm(); 
+                closeStudentDetailPopup();
+                filterRecords();
             }
 
             function syncDatabase() {
@@ -6989,8 +7083,7 @@
 
             function deleteFromPreview() {
                 if (!previewRecord || !previewRecord.id) return;
-                showModal('confirm', 'Delete Record?', 'Are you sure you want to delete this previewed record?', () => {
-                    const id = previewRecord.id;
+                const id = previewRecord.id;
                     const deleted = previewRecord;
                     addActivity('DELETE', deleted);
 
@@ -7008,14 +7101,9 @@
 
                     const rec = findRecordById(db, id);
                     if(rec) {
-                        rec.isDeleted = true;
-                        rec.deletedAt = new Date().toISOString();
-                        storeRecordInDb(rec);
-                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
-                        const isVerified = rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Completed';
-                        if (isVerified) {
-                            serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
-                        }
+                        db = db.filter(r => r.id !== id);
+                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                        serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
                     }
                     showToast('Record removed successfully');
 
@@ -9396,6 +9484,73 @@
     };
     </script>
 
+    <!-- Swipe to Back Functionality -->
+    <script>
+    (function() {
+        let touchstartX = 0;
+        let touchstartY = 0;
+        const SWIPE_THRESHOLD = 50; 
+        const EDGE_THRESHOLD = 50; 
+
+        document.addEventListener('touchstart', e => {
+            if (!e.changedTouches || e.changedTouches.length === 0) return;
+            touchstartX = e.changedTouches[0].screenX;
+            touchstartY = e.changedTouches[0].screenY;
+        }, {passive: true});
+
+        document.addEventListener('touchend', e => {
+            if (!e.changedTouches || e.changedTouches.length === 0) return;
+            const touchendX = e.changedTouches[0].screenX;
+            const touchendY = e.changedTouches[0].screenY;
+            
+            if (touchstartX > EDGE_THRESHOLD) return;
+            
+            const deltaX = touchendX - touchstartX;
+            const deltaY = Math.abs(touchendY - touchstartY);
+            
+            if (deltaX > SWIPE_THRESHOLD && deltaX > deltaY * 1.5) {
+                handleGlobalSwipeBack();
+            }
+        }, {passive: true});
+
+        function isVisible(el) {
+            if (!el) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden' && !el.classList.contains('hidden') && !el.classList.contains('translate-y-full');
+        }
+
+        function handleGlobalSwipeBack() {
+            if (isVisible(document.getElementById('crop-modal'))) {
+                if(typeof closeCropModal === 'function') closeCropModal();
+                return;
+            }
+            if (isVisible(document.getElementById('custom-modal'))) {
+                if(typeof closeModal === 'function') closeModal();
+                return;
+            }
+            if (isVisible(document.getElementById('student-detail-popup'))) {
+                if(typeof closeStudentDetailPopup === 'function') closeStudentDetailPopup();
+                return;
+            }
+            if (isVisible(document.getElementById('account-modal'))) {
+                if(typeof closeAccountModal === 'function') closeAccountModal();
+                return;
+            }
+            if (isVisible(document.getElementById('school-config'))) {
+                if(typeof closeSchoolConfig === 'function') closeSchoolConfig();
+                return;
+            }
+            if (isVisible(document.getElementById('import-export-modal'))) {
+                if(typeof closeImportExportModal === 'function') closeImportExportModal();
+                return;
+            }
+            if (isVisible(document.getElementById('student-form-section'))) {
+                if(typeof closeStudentForm === 'function') closeStudentForm();
+                return;
+            }
+        }
+    })();
+    </script>
 </body>
 
 </html>

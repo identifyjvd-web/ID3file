@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -580,9 +580,22 @@
                 serverCall(fn, args, onSuccess, onFailure);
             }
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
-                const { collection, addDoc, getDocs, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
+                const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
-                    if (fn === 'getRecords') {
+                    if (fn === 'getFormFields') {
+                        const docRef = doc(window.db, "system", "formConfig");
+                        const snap = await getDoc(docRef);
+                        if (snap.exists() && snap.data().fb_fields) {
+                            if (onSuccess) onSuccess(snap.data().fb_fields);
+                        } else {
+                            if (onSuccess) onSuccess([]);
+                        }
+                    } else if (fn === 'saveFormFields') {
+                        const fields = args[0] || [];
+                        const docRef = doc(window.db, "system", "formConfig");
+                        await setDoc(docRef, { fb_fields: fields }, { merge: true });
+                        if (onSuccess) onSuccess();
+                    } else if (fn === 'getRecords') {
                         if (window._recordsUnsubscribe) {
                             window._recordsUnsubscribe();
                         }
@@ -663,7 +676,7 @@
                             if (onFailure) onFailure(e);
                         });
                     } else if (fn === 'submitStudentData' || fn === 'addRecord') {
-                        const data = args[0];
+                        const data = { ...args[0] };
                         data.updatedAt = Date.now();
                         
                         const fullPhoto = data.fullPhotoData;
@@ -699,7 +712,7 @@
                             if (onSuccess) onSuccess(data);
                         }
                     } else if (fn === 'updateStudentData' || fn === 'updateRecord') {
-                        const data = args[0];
+                        const data = { ...args[0] };
                         data.updatedAt = Date.now();
                         
                         const fullPhoto = data.fullPhotoData;
@@ -2009,6 +2022,17 @@
             function loadAllData(done) {
                 console.log('[loadAllData] fetching fresh data from Firebase...');
                 
+                // Fetch Form Builder Configuration from Firebase
+                try {
+                    serverCallSilent('getFormFields', [], (serverFields) => {
+                        if (serverFields && Array.isArray(serverFields) && serverFields.length > 0) {
+                            fb_fields = serverFields;
+                            if (typeof fb_syncToAppData === 'function') fb_syncToAppData();
+                            if (typeof fb_renderForm === 'function') fb_renderForm();
+                        }
+                    });
+                } catch(e) { console.error('Error fetching form config', e); }
+
                 // Fetch from server directly without local cache
                 serverCallSilent('getRecords', [], (serverDb) => {
                     if (serverDb && Array.isArray(serverDb)) {
@@ -3311,20 +3335,19 @@
 
             function deleteRow(id) {
                 showModal('confirm', 'Delete Record?', 'Permanently delete this record?', () => {
-                    const deleted = findRecordById(db, id);
-                    if (deleted) {
-                        addActivity('DELETE', deleted);
-                        registerLocalDeletion(id);
-                        db = db.filter(r => r.id !== id);
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
-                        showToast('Record Deleted');
-                        renderHomeAnalysis();
-                        filterRecords();
-                    } else {
-                        showModal('error', 'Failed', 'Record not found.');
-                    }
-                });
+                const deleted = findRecordById(db, id);
+                if (deleted) {
+                    addActivity('DELETE', deleted);
+                    registerLocalDeletion(id);
+                    db = db.filter(r => r.id !== id);
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                    serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
+                    showToast('Record Deleted');
+                    closeStudentDetailPopup();
+                    filterRecords();
+                } else {
+                    showToast('Record not found.');
+                }
             }
 
             function confirmDeleteAllSystemData() {
@@ -3731,8 +3754,21 @@
                 
                 if (!sNameVal || !fNameVal || !classVal) { lastDuplicatePromptKey = ''; return; }
                 
-                serverCallSilent('checkDuplicate', [{ sName: sNameVal, fName: fNameVal, cVal: classVal, currentEditId: editId }], (matches) => {
-                    if (!matches || matches.length === 0) { lastDuplicatePromptKey = ''; return; }
+                let matches = [];
+                const lowerN = sNameVal.toLowerCase();
+                const lowerF = fNameVal.toLowerCase();
+                db.forEach(data => {
+                    if (String(data.id) === String(editId)) return;
+                    if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
+                    const rName = (data.studentName || '').trim().toLowerCase();
+                    const rFather = (data.fatherName || '').trim().toLowerCase();
+                    const rClass = data.sclass;
+                    if (rClass === classVal && rName === lowerN && rFather === lowerF) {
+                        matches.push(data);
+                    }
+                });
+
+                if (!matches || matches.length === 0) { lastDuplicatePromptKey = ''; return; }
                     
                     if (matches.length > 1) {
                         const multiKey = `multi::${sNameVal}::${fNameVal}::${classVal}::${editId}`;
@@ -3750,7 +3786,6 @@
                     const title = 'Existing Record Found';
                     const msg = `Student: ${existing.studentName || '-'}\nFather: ${existing.fatherName || '-'}\nClass: ${existing.sclass || '-'}\n\nYe record pehle se maujood hai.\nKya aap is data ko autofill karna chahte hain?`;
                     showModal('confirm', title, msg, () => { populateFormFromRecord(existing); showModal('success', 'Autofill Complete', 'Existing record form me load ho gaya.'); }, 'Yes, Autofill');
-                });
             }
             function hasDraftFormContent() { return getFormFieldMap().some(k => { const el = document.getElementById('in-' + k); return el && String(el.value || '').trim() !== ''; }) || !!pendingUploadedDocument || !!originalFileName; }
             function buildFormRecordPayload(options = {}) {
@@ -3928,7 +3963,7 @@
                     currentFileType = compFile.type;
 
                     setUploadFieldProgress('Saved Locally', 100, false);
-                    resetUploadFieldLabel('Saved âœ…');
+                    resetUploadFieldLabel('Saved Ã¢Å“â€¦');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
                 });
@@ -4167,59 +4202,42 @@
                         nextSn = maxSn + 1;
                     }
                     
-                    // Server-side duplicate check
+                    // Local duplicate check (instant, works offline)
                     if (!proceedSave.bypassDuplicateCheck) {
                         toggleSaveLoading(true);
-                        serverCall('checkDuplicate', [{ sName: n, fName: fatherVal, cVal: cl, currentEditId: eid }], (matches) => {
-                            if (matches && matches.length > 0) {
-                                let duplicate = matches[0];
-                                isSavingRecord = false;
-                                toggleSaveLoading(false);
-                                showModal('confirm', 
-                                    'Duplicate Entry Found!', 
-                                    `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span> (Record ID: <span class="text-slate-900 font-bold text-[15px]">${duplicate.id}</span>).<br><br>Would you like to open the existing record or proceed to create a new one?`, 
-                                    () => {
-                                        proceedSave.bypassDuplicateCheck = true;
-                                        proceedSave();
-                                    }, 
-                                    'Create New'
-                                );
-                                
-                                const actions = document.getElementById('modal-actions');
-                                if (actions) {
-                                    actions.innerHTML = `
-                                        <div class="w-full flex flex-col gap-3">
-                                            <div class="flex gap-3 w-full">
-                                                <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
-                                                <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
-                                            </div>
-                                            <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
-                                        </div>
-                                    `;
-                                    
-                                    document.getElementById('modal-load-old-btn').onclick = () => {
-                                        closeModal();
-                                        setBlankRecordMode('edit');
-                                        populateFormFromRecord(duplicate);
-                                    };
-                                    
-                                    document.getElementById('modal-confirm-btn').onclick = () => {
-                                        closeModal();
-                                        proceedSave.bypassDuplicateCheck = true;
-                                        proceedSave();
-                                    };
-                                }
-                            } else {
-                                proceedSave.bypassDuplicateCheck = true;
-                                proceedSave();
+                        let matches = [];
+                        const lowerN = n.trim().toLowerCase();
+                        const lowerF = fatherVal.trim().toLowerCase();
+                        db.forEach(data => {
+                            if (String(data.id) === String(eid)) return;
+                            if (data.isDeleted || String(data.isDeleted).toLowerCase() === 'true') return;
+                            const rName = (data.studentName || '').trim().toLowerCase();
+                            const rFather = (data.fatherName || '').trim().toLowerCase();
+                            const rClass = data.sclass;
+                            if (rClass === cl && rName === lowerN && rFather === lowerF) {
+                                matches.push(data);
                             }
-                        }, () => {
-                            // On failure, bypass the check to ensure they can still save
-                            toggleSaveLoading(false);
-                            proceedSave.bypassDuplicateCheck = true;
-                            proceedSave();
                         });
-                        return;
+
+                        if (matches && matches.length > 0) {
+                            let duplicate = matches[0];
+                            isSavingRecord = false;
+                            toggleSaveLoading(false);
+                            
+                            // Replaced modal-based logic with local status/log
+                            showToast("Duplicate record exists! (ID: " + duplicate.id + ")", "error");
+                            
+                            // Proceed anyway or open duplicate
+                            setBlankRecordMode('edit');
+                            populateFormFromRecord(duplicate);
+                            return;
+                        }
+                        
+                        proceedSave.bypassDuplicateCheck = true;
+                        isSavingRecord = false;
+                        toggleSaveLoading(false);
+                        proceedSave();
+                        return; // Halt and re-enter without duplicate check
                     }
                     proceedSave.bypassDuplicateCheck = false;
 
@@ -4301,7 +4319,7 @@
                         filterRecords();
                         const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
                         const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
-                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                        showToast(modalTitle, 'success');
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
@@ -4525,73 +4543,68 @@
                 syncSelectedRecordsSection();
                 if (selectedRecords.size === 0) return;
                 
-                showModal('confirm', 'Verify Selected?', `Are you sure you want to verify ${selectedRecords.size} records?`, async () => {
-                    let updatedCount = 0;
-                    const recordsToUpdate = [];
-                    for (const id of Array.from(selectedRecords)) {
-                        const idx = db.findIndex(x => x.id === id);
-                        if (idx !== -1 && !db[idx].verified) {
-                            db[idx].verified = true;
-                            db[idx].verificationDate = new Date().toISOString();
-                            db[idx].verifiedBy = getCurrentUserName();
-                            db[idx].verifiedAt = Date.now();
-                            db[idx]._syncStatus = 'synced';
-                            db[idx]._pending = false;
-                            recordsToUpdate.push(db[idx]);
-                            updatedCount++;
-                        }
+                // Simplified background verification
+                let updatedCount = 0;
+                const recordsToUpdate = [];
+                for (const id of Array.from(selectedRecords)) {
+                    const idx = db.findIndex(x => x.id === id);
+                    if (idx !== -1 && !db[idx].verified) {
+                        db[idx].verified = true;
+                        db[idx].verificationDate = new Date().toISOString();
+                        db[idx].verifiedBy = getCurrentUserName();
+                        db[idx].verifiedAt = Date.now();
+                        db[idx]._syncStatus = 'synced';
+                        db[idx]._pending = false;
+                        recordsToUpdate.push(db[idx]);
+                        updatedCount++;
                     }
+                }
 
-                    if (updatedCount > 0) {
-                        try {
-                            serverCallSilent('bulkVerifyRecords', [recordsToUpdate], () => {}, () => {});
-                        } catch (e) {
-                            console.error('Error verifying records', e);
-                        }
-                        
-                        showToast(`${updatedCount} records verified!`);
-                        selectedRecords.clear();
-                        filterRecords();
-                        renderHomeAnalysis();
+                if (updatedCount > 0) {
+                    try {
+                        serverCallSilent('bulkVerifyRecords', [recordsToUpdate], () => {}, () => {});
+                    } catch (e) {
+                        console.error('Error verifying records', e);
                     }
-                }, 'Yes, Verify');
+                    
+                    showToast(`${updatedCount} records verified!`);
+                    selectedRecords.clear();
+                    filterRecords();
+                    renderHomeAnalysis();
+                }
             }
 
             function bulkDeleteSelected() {
                 syncSelectedRecordsSection();
                 if (selectedRecords.size === 0) return;
                 
-                showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
-                    const idsToDelete = Array.from(selectedRecords);
-                    idsToDelete.forEach(id => {
-                        registerLocalDeletion(id);
-                        db = db.filter(r => String(r.id) !== String(id));
-                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    });
-                    serverCallSilent('bulkDeleteRecords', [idsToDelete], ()=>{}, ()=>{});
+                const idsToDelete = Array.from(selectedRecords);
+                idsToDelete.forEach(id => {
+                    registerLocalDeletion(id);
+                    db = db.filter(r => String(r.id) !== String(id));
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                });
+                serverCallSilent('bulkDeleteRecords', [idsToDelete], ()=>{}, ()=>{});
 
-                    
-                    showToast(`${idsToDelete.length} records deleted!`);
-                    selectedRecords.clear();
-                    filterRecords();
-                    renderHomeAnalysis();
-                }, 'Yes, Delete');
+                
+                showToast(`${idsToDelete.length} records deleted!`);
+                selectedRecords.clear();
+                filterRecords();
+                renderHomeAnalysis();
             }
 
             function sendToIdentifyFromPreview() {
                 if (!previewRecord || !previewRecord.id) return;
-                showModal('confirm', 'Send to IDentify?', 'Are you sure you want to send this record to IDentify?', () => {
-                    const finalRec = { ...previewRecord, verified: 'Identify' };
-                    serverCallSilent('updateRecord', [finalRec], (res) => {});
-                    const idx = db.findIndex(r => String(r.id) === String(finalRec.id));
-                    if (idx >= 0) db[idx] = finalRec;
-                    
-                    setBlankRecordMode('none');
-                    showTab('records');
-                    filterRecords();
-                    renderHomeAnalysis();
-                    showToast('Sent to IDentify');
-                }, 'Yes, Send');
+                const finalRec = { ...previewRecord, verified: 'Identify' };
+                serverCallSilent('updateRecord', [finalRec], (res) => {});
+                const idx = db.findIndex(r => String(r.id) === String(finalRec.id));
+                if (idx >= 0) db[idx] = finalRec;
+                
+                setBlankRecordMode('none');
+                showTab('records');
+                filterRecords();
+                renderHomeAnalysis();
+                showToast('Sent to IDentify');
             }
 
                         async function bulkExportSelected() {
@@ -4719,7 +4732,7 @@
                     
                 } catch (error) {
                     console.error(error);
-                    showModal('alert', 'Export Failed', 'An error occurred during export. Check console.');
+                    showToast('Export Failed: An error occurred.');
                 } finally {
                     if(btn) btn.innerHTML = '<i class="fa-solid fa-file-export text-[16px]"></i>';
                 }
@@ -5136,10 +5149,8 @@
                     if (blankRecordMode === 'preview' && previewRecord) {
                         const rec = previewRecord;
                         const tsDisplay = getFormattedTimestamp(rec.updatedAt || rec.createdAt || new Date());
-                        // Best available photo: immediate dataUrl > _displayPhotoSrc > docUrl (fixed)
-                        const _bestPhotoSrc = (rec.photoData && rec.photoData.startsWith('data:image'))
-                            ? rec.photoData
-                            : (rec._displayPhotoSrc || fixDriveImageUrl(rec.docUrl || ''));
+                        // Best available photo: fullPhotoData > _displayPhotoSrc > docUrl > photoData
+                        const _bestPhotoSrc = rec.fullPhotoData || rec._displayPhotoSrc || (rec.docUrl ? fixDriveImageUrl(rec.docUrl) : null) || rec.photoData || '';
                         const hasDoc = (_bestPhotoSrc && _bestPhotoSrc.length > 10);
                         const docRes = _bestPhotoSrc;
                         const isReturned = (rec.isDeleted || String(rec.verified).toLowerCase() === 'returned' || String(rec.status).toLowerCase() === 'returned' || rec.returned === true || String(rec.returned).toLowerCase() === 'true');
@@ -6372,8 +6383,7 @@
                 const nowTs = Date.now();
                 
                 // Instant feedback & clear form
-                showToast((localRec.studentName || 'Record') + ' Verified Successfully');
-                setChipFilter('status', 'verified'); 
+                showToast((localRec.studentName || 'Record') + ' Verified Successfully'); 
                 previewRecord.verified = true;
                 
                 const idxSync = db.findIndex(x => x.id === localRec.id);
@@ -6417,7 +6427,7 @@
                             showToast("Network Error: ID Generation Failed. Saved as Draft.", "error");
                             return;
                         }
-
+                        
                         const paddedSn = String(nextSn).padStart(3, '0');
                         const generatedId = `${schoolInitials || "DPS"}${year}${paddedSn}`;
                         
@@ -6492,7 +6502,7 @@
                     previewRecord = null;
                     setBlankRecordMode('none');
                     showTab('records');
-                    showToast('Sab pending records verify ho gaye! 🎉');
+                    showToast('Sab pending records verify ho gaye! ðŸŽ‰');
                 }
 
                 // Run heavy operations in the background
@@ -6606,27 +6616,28 @@
                     draftServerRecordId = '';
                 }
 
-                showModal('success', modalTitle, '', () => {
-                    const currentRec = previewRecord;
-                    isPreviewFromSave = false;
-                    isPendingBatch = false;
-                    resetForm(true); 
-                    
-                    if (currentRec) {
-                        previewRecord = currentRec;
-                        const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
-                        const currentIndex = list.findIndex(r => r.id === previewRecord.id);
-                        if (currentIndex >= 0 && currentIndex < list.length - 1) {
-                            openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
-                            return;
-                        } else {
-                            showToast("You have reached the end.");
-                        }
+                showToast(modalTitle, 'success');
+                const currentRec = previewRecord;
+                isPreviewFromSave = false;
+                isPendingBatch = false;
+                resetForm(true); 
+                
+                if (currentRec) {
+                    previewRecord = currentRec;
+                    const list = (currentRenderedRecords && currentRenderedRecords.length > 0 && currentRenderedRecords.findIndex(r => r.id === previewRecord.id) !== -1) ? currentRenderedRecords : db;
+                    const currentIndex = list.findIndex(r => r.id === previewRecord.id);
+                    if (currentIndex >= 0 && currentIndex < list.length - 1) {
+                        openStudentDetailPopup(list[currentIndex + 1], false, isPendingBatch);
+                        return;
+                    } else {
+                        showToast("You have reached the end.");
                     }
-                    
-                    previewRecord = null;
-                    closeStudentForm(); 
-                }, 'Yes, Delete', `${studentName}'s Data`);
+                }
+                
+                previewRecord = null;
+                closeStudentForm(); 
+                closeStudentDetailPopup();
+                filterRecords();
             }
 
             function syncDatabase() {
@@ -6660,8 +6671,7 @@
 
             function deleteFromPreview() {
                 if (!previewRecord || !previewRecord.id) return;
-                showModal('confirm', 'Delete Record?', 'Are you sure you want to delete this previewed record?', () => {
-                    const id = previewRecord.id;
+                const id = previewRecord.id;
                     const deleted = previewRecord;
                     addActivity('DELETE', deleted);
 
@@ -8936,6 +8946,73 @@
     }
     </script>
 
+    <!-- Swipe to Back Functionality -->
+    <script>
+    (function() {
+        let touchstartX = 0;
+        let touchstartY = 0;
+        const SWIPE_THRESHOLD = 50; 
+        const EDGE_THRESHOLD = 50; 
+
+        document.addEventListener('touchstart', e => {
+            if (!e.changedTouches || e.changedTouches.length === 0) return;
+            touchstartX = e.changedTouches[0].screenX;
+            touchstartY = e.changedTouches[0].screenY;
+        }, {passive: true});
+
+        document.addEventListener('touchend', e => {
+            if (!e.changedTouches || e.changedTouches.length === 0) return;
+            const touchendX = e.changedTouches[0].screenX;
+            const touchendY = e.changedTouches[0].screenY;
+            
+            if (touchstartX > EDGE_THRESHOLD) return;
+            
+            const deltaX = touchendX - touchstartX;
+            const deltaY = Math.abs(touchendY - touchstartY);
+            
+            if (deltaX > SWIPE_THRESHOLD && deltaX > deltaY * 1.5) {
+                handleGlobalSwipeBack();
+            }
+        }, {passive: true});
+
+        function isVisible(el) {
+            if (!el) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden' && !el.classList.contains('hidden') && !el.classList.contains('translate-y-full');
+        }
+
+        function handleGlobalSwipeBack() {
+            if (isVisible(document.getElementById('crop-modal'))) {
+                if(typeof closeCropModal === 'function') closeCropModal();
+                return;
+            }
+            if (isVisible(document.getElementById('custom-modal'))) {
+                if(typeof closeModal === 'function') closeModal();
+                return;
+            }
+            if (isVisible(document.getElementById('student-detail-popup'))) {
+                if(typeof closeStudentDetailPopup === 'function') closeStudentDetailPopup();
+                return;
+            }
+            if (isVisible(document.getElementById('account-modal'))) {
+                if(typeof closeAccountModal === 'function') closeAccountModal();
+                return;
+            }
+            if (isVisible(document.getElementById('school-config'))) {
+                if(typeof closeSchoolConfig === 'function') closeSchoolConfig();
+                return;
+            }
+            if (isVisible(document.getElementById('import-export-modal'))) {
+                if(typeof closeImportExportModal === 'function') closeImportExportModal();
+                return;
+            }
+            if (isVisible(document.getElementById('student-form-section'))) {
+                if(typeof closeStudentForm === 'function') closeStudentForm();
+                return;
+            }
+        }
+    })();
+    </script>
 </body>
 
 </html>
