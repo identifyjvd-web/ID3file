@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -66,8 +66,7 @@
             console.error("Firebase initialization error:", e);
         }
     </script>
-
-                            <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json">
 </head>
 
 <body class="flex flex-col h-screen">
@@ -275,7 +274,7 @@
                         <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
                         <button id="toggle-form-btn" onclick="toggleStudentForm()"
                             class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all relative">
-                            <i id="toggle-icon" class="fa-solid fa-plus text-sm"></i>
+                            <i class="fa-solid fa-plus text-sm"></i>
                         </button>
                     </div>
 
@@ -878,10 +877,10 @@
                         toggleBtn.style.width = '36px';
                         if (blankRecordMode === 'none') {
                             toggleBtn.onclick = confirmLogout;
-                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
                         } else {
                             toggleBtn.onclick = () => closeStudentForm();
-                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
                         }
                     }
 
@@ -911,7 +910,7 @@
                         toggleBtn.style.width = '36px';
                         toggleBtn.onclick = () => toggleStudentForm();
                         const isAnyMode = blankRecordMode !== 'none';
-                        toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                        toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                     }
 
                     // Reset verified button label to default school style
@@ -1460,10 +1459,6 @@
                 
                 if (window.firebaseAPI && window.firebaseAPI.onAuthStateChanged && window.auth) {
                     window.firebaseAPI.onAuthStateChanged(window.auth, async (firebaseUser) => {
-                        // Dev login bypass mock
-                        if (savedUser && savedUser.userId === 'school_dev') {
-                            firebaseUser = { uid: 'school_dev' };
-                        }
                         if (savedUser && savedUser.role === 'school' && !firebaseUser) {
                             if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
                                 try {
@@ -4150,7 +4145,7 @@
                     currentFileType = compFile.type;
 
                     setUploadFieldProgress('Saved Locally', 100, false);
-                    resetUploadFieldLabel('Saved âœ…');
+                    resetUploadFieldLabel('Saved Ã¢Å“â€¦');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
                 });
@@ -4673,17 +4668,17 @@
                             toggleBtn.style.width = '36px';
                             if (blankRecordMode === 'none') {
                                 toggleBtn.onclick = confirmLogout;
-                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
                             } else {
                                 toggleBtn.onclick = () => closeStudentForm();
-                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
                             }
                         } else {
                             toggleBtn.style.display = '';
                             toggleBtn.style.width = '36px';
                             toggleBtn.onclick = () => toggleStudentForm();
                             const isAnyMode = blankRecordMode !== 'none';
-                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                            toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                         }
                     }
                 }
@@ -5740,7 +5735,7 @@
                                         </div>
                                         <div class="relative">
                                             <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
-                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
+                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (leave blank to keep current)" value="">
                                             <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
                                                 <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
                                             </button>
@@ -6738,7 +6733,7 @@
                     previewRecord = null;
                     setBlankRecordMode('none');
                     showTab('records');
-                    showToast('Sab pending records verify ho gaye! 🎉');
+                    showToast('Sab pending records verify ho gaye! ðŸŽ‰');
                 }
 
                 // Run heavy operations in the background
