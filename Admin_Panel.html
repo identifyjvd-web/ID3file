@@ -750,6 +750,19 @@
                         });
                         await Promise.all(promises);
                         if (onSuccess) onSuccess(true);
+                    } else if (fn === 'saveFormFields') {
+                        const data = args[0];
+                        const docRef = doc(window.db, "system", "formBuilderConfig");
+                        await setDoc(docRef, data);
+                        if (onSuccess) onSuccess();
+                    } else if (fn === 'getFormFields') {
+                        const docRef = doc(window.db, "system", "formBuilderConfig");
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            if (onSuccess) onSuccess(docSnap.data());
+                        } else {
+                            if (onSuccess) onSuccess(null);
+                        }
                     } else if (fn === 'generateId') {
                         const { runTransaction } = window.firebaseAPI;
                         if (!runTransaction) throw new Error("runTransaction missing");
@@ -1423,8 +1436,10 @@
                 const splash = document.getElementById('initial-splash-screen');
                 if (splash && !splash.classList.contains('hiding')) {
                     splash.classList.add('hiding');
-                    splash.style.opacity = '0';
-                    setTimeout(() => splash.remove(), 500);
+                    setTimeout(() => {
+                        splash.style.opacity = '0';
+                        setTimeout(() => splash.remove(), 500);
+                    }, 2500);
                 }
             }
             let appBooted = false;
@@ -2171,6 +2186,43 @@
                         schoolConfig = { ...DEFAULT_CONFIG, ...data };
                         localStorage.setItem(CONFIG_KEY, JSON.stringify(schoolConfig));
                         updateBrandingUI();
+                    }
+                    
+                    // Fetch Form Builder config
+                    try {
+                        const fbDocRef = window.firebaseAPI.doc(window.db, "system", "formBuilderConfig");
+                        const fbDocSnap = await window.firebaseAPI.getDoc(fbDocRef);
+                        if (fbDocSnap.exists()) {
+                            const fbData = fbDocSnap.data();
+                            if (fbData.fields) {
+                                localStorage.setItem('identify_fb_fields', JSON.stringify(fbData.fields));
+                                if (typeof fb_fields !== 'undefined') fb_fields = fbData.fields;
+                            }
+                            if (fbData.standardConfig) {
+                                localStorage.setItem('identify_fb_std_config', JSON.stringify(fbData.standardConfig));
+                                if (typeof fb_standard_config !== 'undefined') fb_standard_config = fbData.standardConfig;
+                            }
+                            if (fbData.removed) {
+                                localStorage.setItem('identify_fb_removed', JSON.stringify(fbData.removed));
+                                if (typeof fb_removed !== 'undefined') fb_removed = fbData.removed;
+                            }
+                            if (fbData.formOrder) {
+                                localStorage.setItem('identify_fb_form_order', JSON.stringify(fbData.formOrder));
+                                if (typeof fb_form_order !== 'undefined') fb_form_order = fbData.formOrder;
+                            }
+                            if (fbData.standardLabels) {
+                                localStorage.setItem('identify_fb_std_labels', JSON.stringify(fbData.standardLabels));
+                                if (typeof fb_standard_labels !== 'undefined') fb_standard_labels = fbData.standardLabels;
+                            }
+                            if (fbData.standardMeta) {
+                                localStorage.setItem('identify_fb_std_meta', JSON.stringify(fbData.standardMeta));
+                                if (typeof fb_standard_meta !== 'undefined') fb_standard_meta = fbData.standardMeta;
+                            }
+                            if (typeof fb_renderForm === 'function') fb_renderForm();
+                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                        }
+                    } catch (fbErr) {
+                        console.error("Failed to fetch form builder config", fbErr);
                     }
                 } catch (e) {
                     console.error("Failed to fetch config from Firebase", e);
@@ -3187,7 +3239,16 @@
                 if (db.length === 0) { showModal('error', 'Empty', 'No data to export'); return; }
                 const exportData = getSortedRecords(db).map((r, index) => {
                     return {
-                        'Sn': r.sn || index + 1,
+                        'Sn': (() => {
+                            const isRecVerified = (r.verified === true || String(r.verified).toLowerCase() === 'true' || r.verified === 'Completed');
+                            const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                            if (isRecVerified) {
+                                const snVal = r.sn || (index + 1);
+                                return si + String(snVal).padStart(2, '0');
+                            } else {
+                                return si + 'DRAFT';
+                            }
+                        })(),
                         'Id No': r.id || '',
                         'Student Name': r.studentName || '',
                         'Father Name': r.fatherName || '',
@@ -5432,15 +5493,16 @@
                         <div class="preview-details-box py-1.5 mb-2">
                             <div class="flex items-center justify-between px-1">
                                 <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-id-badge text-[#05996c] text-[10px]"></i>
-                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">ID: ${ (() => {
-                                        let dId = rec.id || 'NEW';
-                                        if (dId.startsWith('draft_')) {
-                                            const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase();
-                                            const yr = new Date().getFullYear().toString().slice(-2);
-                                            return `${si || "DPS"}${yr}DRAFT`;
+                                    <i class="fa-solid fa-hashtag text-[#05996c] text-[10px]"></i>
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">SN: ${ (() => {
+                                        const isRecVerified = (rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Completed');
+                                        const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                                        if (isRecVerified) {
+                                            const snVal = rec.sn || '0';
+                                            return si + String(snVal).padStart(2, '0');
+                                        } else {
+                                            return si + 'DRAFT';
                                         }
-                                        return dId;
                                     })() }</div>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -8638,7 +8700,15 @@
             localStorage.setItem('identifyCustomFields', JSON.stringify(customFieldsConfig));
 
             // Sync to server if available
-            serverCallSilent('saveFormFields', [fb_fields], () => {
+            const fbDataToSave = {
+                fields: fb_fields,
+                standardConfig: fb_standard_config,
+                removed: fb_removed,
+                formOrder: fb_form_order,
+                standardLabels: typeof fb_standard_labels !== 'undefined' ? fb_standard_labels : {},
+                standardMeta: typeof fb_standard_meta !== 'undefined' ? fb_standard_meta : {}
+            };
+            serverCallSilent('saveFormFields', [fbDataToSave], () => {
                 if (btn) btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved';
                 setTimeout(() => {
                     if (btn) {
