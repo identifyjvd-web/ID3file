@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -66,7 +66,8 @@
             console.error("Firebase initialization error:", e);
         }
     </script>
-    <link rel="manifest" href="manifest.json">
+
+                            <link rel="manifest" href="manifest.json">
 </head>
 
 <body class="flex flex-col h-screen">
@@ -271,7 +272,7 @@
                         <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
                         <button id="toggle-form-btn" onclick="toggleStudentForm()"
                             class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all relative">
-                            <i class="fa-solid fa-plus text-sm"></i>
+                            <i id="toggle-icon" class="fa-solid fa-plus text-sm"></i>
                         </button>
                     </div>
 
@@ -691,23 +692,9 @@
                     else setTimeout(() => onFailure(new Error("Firebase is not initialized or offline")), 500);
                 }
             }
-            function isVerifiedForServerSync(rec) {
-                if (!rec) return false;
-                const v = rec.verified;
-                const s = String(v).toLowerCase();
-                return v === true || s === 'true' || s === 'completed';
-            }
-            function shouldSyncRecordToServer(fn, rec) {
-                if (!(fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord')) return true;
-                return isVerifiedForServerSync(rec);
-            }
             function serverCallSilent(fn, args, onSuccess, onFailure) {
-                const rec = args && args[0];
-                if (!shouldSyncRecordToServer(fn, rec)) {
-                    if (onSuccess) setTimeout(() => onSuccess({ skippedServerSync: true, record: rec }), 0);
-                    return;
-                }
                 if (!navigator.onLine && (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord')) {
+                    const rec = args[0];
                     if (rec && rec.id) {
                         SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
                         if (onSuccess) onSuccess(rec);
@@ -716,7 +703,8 @@
                 }
                 serverCall(fn, args, onSuccess, (err) => {
                     if (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord') {
-                        if (rec && rec.id && shouldSyncRecordToServer(fn, rec)) {
+                        const rec = args[0];
+                        if (rec && rec.id) {
                             SchoolLocalDB.enqueueSync({ id: rec.id, fn: fn, data: rec, timestamp: Date.now() });
                             if (onSuccess) onSuccess(rec);
                             return;
@@ -914,10 +902,10 @@
                         toggleBtn.style.width = '36px';
                         if (blankRecordMode === 'none') {
                             toggleBtn.onclick = confirmLogout;
-                            toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
                         } else {
                             toggleBtn.onclick = () => closeStudentForm();
-                            toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
                         }
                     }
 
@@ -947,7 +935,7 @@
                         toggleBtn.style.width = '36px';
                         toggleBtn.onclick = () => toggleStudentForm();
                         const isAnyMode = blankRecordMode !== 'none';
-                        toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                        toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                     }
 
                     // Reset verified button label to default school style
@@ -1568,6 +1556,10 @@
                 
                 if (window.firebaseAPI && window.firebaseAPI.onAuthStateChanged && window.auth) {
                     window.firebaseAPI.onAuthStateChanged(window.auth, async (firebaseUser) => {
+                        // Dev login bypass mock
+                        if (savedUser && savedUser.userId === 'school_dev') {
+                            firebaseUser = { uid: 'school_dev' };
+                        }
                         if (savedUser && savedUser.role === 'school' && !firebaseUser) {
                             if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
                                 try {
@@ -2815,13 +2807,13 @@
             }
             function setBlankRecordMode(mode = 'none') {
                 const filterRow = document.getElementById('class-filter-row');
+                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
-                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const search = document.getElementById('mainSearch');
                 const searchIcon = document.getElementById('search-icon');
                 const info = document.getElementById('records-page-info-db');
                 const altInfo = document.getElementById('records-page-info-db');
-                if (!filterRow || !btn || !search || !searchIcon || !info) return;
+                if (!filterRow || !icon || !btn || !search || !searchIcon || !info) return;
 
                 closeAllMenus();
                 blankRecordMode = mode;
@@ -2876,9 +2868,9 @@
                 const isAnyMode = mode !== 'none';
                 
                 if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
-                    if (icon) icon.className = 'fa-solid fa-arrow-left';
+                    icon.className = 'fa-solid fa-arrow-left';
                 } else {
-                    if (icon) icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
+                    icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
                 }
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
@@ -3166,8 +3158,8 @@
             let filterDebounceTimer = null;
             function onSearchInput() {
                 const search = document.getElementById('mainSearch');
+                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
-                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const wrapper = document.getElementById('form-scroll-wrapper');
 
                 if (!search || !icon || !btn) return;
@@ -3497,7 +3489,7 @@
                 ids.forEach(id => {
                     db = db.filter(r => String(r.id) !== String(id));
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    serverCallSilent('permDelete', [id]);
+                    serverCallSilent('permanentDelete', [id]);
                     count++;
                 });
                 showToast(count + ' records permanently deleted');
@@ -3716,7 +3708,7 @@
                     db = db.filter(r => r.id !== id);
                     if (typeof window.queueServerDraftSync === 'function') window.queueServerDraftSync();
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    serverCallSilent('permDelete', [id], ()=>{}, ()=>{});
+                    serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
                     
                     addActivity('PERM_DELETE', item);
                     showToast('Record Permanently Deleted');
@@ -3760,7 +3752,7 @@
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     addActivity('PERM_DELETE', item);
                 }
-                serverCallSilent('permDelete', [id], ()=>{}, ()=>{});
+                serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
                 showToast('Permanently Deleted');
                 bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                 renderRecycleBin();
@@ -4293,7 +4285,7 @@
                     currentFileType = compFile.type;
 
                     setUploadFieldProgress('Saved Locally', 100, false);
-                    resetUploadFieldLabel('Saved Ã¢Å“â€¦');
+                    resetUploadFieldLabel('Saved âœ…');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
                     renderCurrentRecordsPage();
@@ -4529,12 +4521,7 @@
                     // Calculate Local SN if missing
                     let nextSn = existing ? existing.sn : null;
                     if (!nextSn) {
-                        let maxSn = 0;
-                        db.forEach(r => {
-                            const val = parseInt(r.sn, 10);
-                            if (!isNaN(val) && val > maxSn) maxSn = val;
-                        });
-                        nextSn = maxSn + 1;
+                        nextSn = Date.now();
                     }
 
                     // Check duplicate record locally (Student Name, Father Name, Class)
@@ -4641,7 +4628,7 @@
                         verified: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? false : !!(existing && existing.verified && String(existing.verified).toLowerCase() !== 'false'),
                         returned: false,
                         isRestored: false,
-                        status: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? (hasPendingOrSavedDoc ? 'unverified' : 'pending') : (existing ? existing.status : (hasPendingOrSavedDoc ? 'unverified' : 'pending')),
+                        status: (existing && existing.verified && String(existing.verified).toLowerCase() !== 'false' && !(String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? existing.status : (hasPendingOrSavedDoc ? 'unverified' : 'pending'),
                         _serverSaved: existing ? !!existing._serverSaved : false,
                         // Preserved metadata fields
                         timestamp: existing ? (existing.timestamp || getFormattedTimestamp(nowTs)) : getFormattedTimestamp(nowTs),
@@ -4700,9 +4687,8 @@
                             }
                         } catch (e) { console.warn('IDB persist failed', e); }
                         
-                        // Push only verified records to Firebase; drafts/unverified stay local.
-                        serverCallSilent('updateRecord', [localRec], (res) => {
-                            if (res && res.skippedServerSync) return;
+                        // Push to Firebase instantly
+                        serverCallSilent('updateRecord', [localRec], () => {
                             const updatedSource = db.find(r => r.id === localRec.id);
                             if (updatedSource) {
                                 updatedSource._serverSaved = true;
@@ -4825,17 +4811,17 @@
                             toggleBtn.style.width = '36px';
                             if (blankRecordMode === 'none') {
                                 toggleBtn.onclick = confirmLogout;
-                                toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
                             } else {
                                 toggleBtn.onclick = () => closeStudentForm();
-                                toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
                             }
                         } else {
                             toggleBtn.style.display = '';
                             toggleBtn.style.width = '36px';
                             toggleBtn.onclick = () => toggleStudentForm();
                             const isAnyMode = blankRecordMode !== 'none';
-                            toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                         }
                     }
                 }
@@ -5962,7 +5948,7 @@
                                         </div>
                                         <div class="relative">
                                             <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
-                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (leave blank to keep current)" value="">
+                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
                                             <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
                                                 <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
                                             </button>
@@ -7021,7 +7007,7 @@
                     previewRecord = null;
                     setBlankRecordMode('none');
                     showTab('records');
-                    showToast('Sab pending records verify ho gaye! ðŸŽ‰');
+                    showToast('Sab pending records verify ho gaye! 🎉');
                 }
 
                 // Run heavy operations in the background

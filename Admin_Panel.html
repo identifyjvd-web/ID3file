@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -66,7 +66,8 @@
             console.error("Firebase initialization error:", e);
         }
     </script>
-    <link rel="manifest" href="manifest.json">
+
+                            <link rel="manifest" href="manifest.json">
 </head>
 
 <body class="flex flex-col h-screen">
@@ -274,7 +275,7 @@
                         <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
                         <button id="toggle-form-btn" onclick="toggleStudentForm()"
                             class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all relative">
-                            <i class="fa-solid fa-plus text-sm"></i>
+                            <i id="toggle-icon" class="fa-solid fa-plus text-sm"></i>
                         </button>
                     </div>
 
@@ -290,21 +291,7 @@
 
 
 
-                        <button id="btn-all-data" class="school-filter-btn active shrink-0" style="display: none;"
-                            onclick="setChipFilter('status', 'all')">All Data</button>
-                        <button id="btn-verified" class="school-filter-btn shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'verified')" title="Verified"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">verified</span></button>
-                        <button id="btn-unverified"
-                            class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'unverified')" title="Unverified"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">unpublished</span></button>
-                        <button id="btn-pending" class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'pending')" title="Pending (No Photo)"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">no_photography</span></button>
+                        
 
                         <!-- Sort Button -->
                         <div class="relative shrink-0 flex items-center ml-auto pl-1 pr-[2px]">
@@ -631,7 +618,7 @@
             let previewRecord = null;
             let isPreviewFromSave = false;
             const AUTO_LOGOUT_MS = 5 * 60 * 1000;
-            let activeStatusFilter = 'all';
+            let activeStatusFilter = 'verified';
             let activeClassFilter = 'all';
 
             // Form Builder State
@@ -877,10 +864,10 @@
                         toggleBtn.style.width = '36px';
                         if (blankRecordMode === 'none') {
                             toggleBtn.onclick = confirmLogout;
-                            toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
                         } else {
                             toggleBtn.onclick = () => closeStudentForm();
-                            toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
                         }
                     }
 
@@ -910,7 +897,7 @@
                         toggleBtn.style.width = '36px';
                         toggleBtn.onclick = () => toggleStudentForm();
                         const isAnyMode = blankRecordMode !== 'none';
-                        toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                        toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                     }
 
                     // Reset verified button label to default school style
@@ -1459,6 +1446,10 @@
                 
                 if (window.firebaseAPI && window.firebaseAPI.onAuthStateChanged && window.auth) {
                     window.firebaseAPI.onAuthStateChanged(window.auth, async (firebaseUser) => {
+                        // Dev login bypass mock
+                        if (savedUser && savedUser.userId === 'school_dev') {
+                            firebaseUser = { uid: 'school_dev' };
+                        }
                         if (savedUser && savedUser.role === 'school' && !firebaseUser) {
                             if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
                                 try {
@@ -2706,13 +2697,13 @@
             }
             function setBlankRecordMode(mode = 'none') {
                 const filterRow = document.getElementById('class-filter-row');
+                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
-                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const search = document.getElementById('mainSearch');
                 const searchIcon = document.getElementById('search-icon');
                 const info = document.getElementById('records-page-info-db');
                 const altInfo = document.getElementById('records-page-info-db');
-                if (!filterRow || !btn || !search || !searchIcon || !info) return;
+                if (!filterRow || !icon || !btn || !search || !searchIcon || !info) return;
 
                 closeAllMenus();
                 blankRecordMode = mode;
@@ -2767,9 +2758,9 @@
                 const isAnyMode = mode !== 'none';
                 
                 if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
-                    if (icon) icon.className = 'fa-solid fa-arrow-left';
+                    icon.className = 'fa-solid fa-arrow-left';
                 } else {
-                    if (icon) icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
+                    icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
                 }
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
@@ -3056,8 +3047,8 @@
             let filterDebounceTimer = null;
             function onSearchInput() {
                 const search = document.getElementById('mainSearch');
+                const icon = document.getElementById('toggle-icon');
                 const btn = document.getElementById('toggle-form-btn');
-                const icon = document.getElementById('toggle-icon') || (btn ? btn.querySelector('i, .material-symbols-outlined') : null);
                 const wrapper = document.getElementById('form-scroll-wrapper');
 
                 if (!search || !icon || !btn) return;
@@ -4145,7 +4136,7 @@
                     currentFileType = compFile.type;
 
                     setUploadFieldProgress('Saved Locally', 100, false);
-                    resetUploadFieldLabel('Saved Ã¢Å“â€¦');
+                    resetUploadFieldLabel('Saved âœ…');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
                 });
@@ -4668,17 +4659,17 @@
                             toggleBtn.style.width = '36px';
                             if (blankRecordMode === 'none') {
                                 toggleBtn.onclick = confirmLogout;
-                                toggleBtn.innerHTML = `<i class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
                             } else {
                                 toggleBtn.onclick = () => closeStudentForm();
-                                toggleBtn.innerHTML = `<i class="fa-solid fa-xmark text-sm"></i>`;
+                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
                             }
                         } else {
                             toggleBtn.style.display = '';
                             toggleBtn.style.width = '36px';
                             toggleBtn.onclick = () => toggleStudentForm();
                             const isAnyMode = blankRecordMode !== 'none';
-                            toggleBtn.innerHTML = `<i class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                         }
                     }
                 }
@@ -5735,7 +5726,7 @@
                                         </div>
                                         <div class="relative">
                                             <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
-                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (leave blank to keep current)" value="">
+                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
                                             <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
                                                 <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
                                             </button>
@@ -6733,7 +6724,7 @@
                     previewRecord = null;
                     setBlankRecordMode('none');
                     showTab('records');
-                    showToast('Sab pending records verify ho gaye! ðŸŽ‰');
+                    showToast('Sab pending records verify ho gaye! 🎉');
                 }
 
                 // Run heavy operations in the background
@@ -7097,15 +7088,7 @@
                 }
             }, { passive: true });
             function handleHomeSwipe(direction) {
-                const statuses = ['all', 'verified', 'unverified', 'pending'];
-                let currentIndex = statuses.indexOf(activeStatusFilter);
-                if (direction === 'left') {
-                    currentIndex = (currentIndex + 1) % statuses.length;
-                } else {
-                    currentIndex = (currentIndex - 1 + statuses.length) % statuses.length;
-                }
-                if (navigator.vibrate) navigator.vibrate(15);
-                setChipFilter('status', statuses[currentIndex]);
+                // Swipe disabled in Admin Panel
             }
 
             // --- STUDENT DETAIL POPUP (HOME PAGE ROW TAP) ---

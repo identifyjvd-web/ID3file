@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -355,6 +355,14 @@
             const errorEl = document.getElementById('login-error');
             const btn = document.getElementById('login-submit-btn');
             if (errorEl) errorEl.classList.add('hidden');
+            
+            // Bypass logic for development
+            if (userId === '123' && password === '123456') {
+                const devUser = { userId: 'school_dev', name: 'Dev School', role: 'school', email: 'dev_school@gmail.com' };
+                saveAuthUser(devUser);
+                window.location.replace('School_Panel.html');
+                return;
+            }
             
             if (!userId) {
                 if (errorEl) {
