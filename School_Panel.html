@@ -4606,7 +4606,7 @@
                     }
 
                     const rec = {
-                        sn: existing ? existing.sn : 0,
+                        sn: nextSn,
                         id: finalId,
                         oldId: oldId, // Send old ID to server so it can replace the row
                         sclass: cl, gender: g, studentName: n,
@@ -4657,6 +4657,12 @@
                         toggleSaveLoading(false);
                         addActivity(eid ? 'UPDATE' : 'ADD', rec);
                         if (!eid) clearDraft();
+                        const existingInDb = db.find(r => String(r.id) === String(rec.id));
+                        if (existingInDb) {
+                            rec._pending = existingInDb._pending;
+                            rec._syncStatus = existingInDb._syncStatus;
+                            rec._serverSaved = existingInDb._serverSaved;
+                        }
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
