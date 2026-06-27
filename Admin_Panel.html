@@ -2177,9 +2177,10 @@
                     // Fetch Form Builder config
                     try {
                         const fbDocRef = window.firebaseAPI.doc(window.db, "system", "formBuilderConfig");
-                        const fbDocSnap = await window.firebaseAPI.getDoc(fbDocRef);
-                        if (fbDocSnap.exists()) {
-                            const fbData = fbDocSnap.data();
+                        if (window._fbConfigUnsubscribe) window._fbConfigUnsubscribe();
+                        window._fbConfigUnsubscribe = window.firebaseAPI.onSnapshot(fbDocRef, (fbDocSnap) => {
+                            if (fbDocSnap.exists()) {
+                                const fbData = fbDocSnap.data();
                             if (fbData.fields) {
                                 localStorage.setItem('identify_fb_fields', JSON.stringify(fbData.fields));
                                 if (typeof fb_fields !== 'undefined') fb_fields = fbData.fields;
@@ -2204,9 +2205,10 @@
                                 localStorage.setItem('identify_fb_std_meta', JSON.stringify(fbData.standardMeta));
                                 if (typeof fb_standard_meta !== 'undefined') fb_standard_meta = fbData.standardMeta;
                             }
-                            if (typeof fb_renderForm === 'function') fb_renderForm();
-                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
-                        }
+                                if (typeof fb_renderForm === 'function') fb_renderForm();
+                                if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                            }
+                        });
                     } catch (fbErr) {
                         console.error("Failed to fetch form builder config", fbErr);
                     }
@@ -5024,8 +5026,8 @@
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
 
                     if (currentUser && currentUser.userId === 'admin') {
-                        // Admin should not see pending records (without photos)
-                        if (activeStatusFilter === 'pending' || (!isRecVerified && !hasAppPhoto)) {
+                        // Admin should ONLY see verified records
+                        if (!isRecVerified) {
                             return false;
                         }
                     }
@@ -5387,8 +5389,10 @@
                         } else {
                             let syncIconHtml = '';
                             if (hasDoc || isPreviewVerified) {
-                                if (previewSyncStatus === 'synced' || previewSyncStatus === 'syncing') {
-                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon ${previewSyncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${previewSyncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                                if (previewRecord && previewRecord._serverSaved) {
+                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon" style="font-variation-settings: 'FILL' 0;" title="Saved to Server">cloud_done</span>`;
+                                } else if (previewSyncStatus === 'syncing') {
+                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon syncing" style="font-variation-settings: 'FILL' 0;" title="Uploading">cloud_upload</span>`;
                                 }
                             }
                             
@@ -6073,8 +6077,10 @@
                     
                     let syncIconStatusHtml = '';
                     if (!x.isDeleted && (hasDoc || isRecVerified || isReturned)) {
-                        if (syncStatus === 'synced' || syncStatus === 'syncing') {
-                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon ${syncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${syncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                        if (x._serverSaved) {
+                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon" style="font-variation-settings: 'FILL' 0;" title="Saved to Server">cloud_done</span>`;
+                        } else if (syncStatus === 'syncing') {
+                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon syncing" style="font-variation-settings: 'FILL' 0;" title="Uploading">cloud_upload</span>`;
                         }
                     }
 

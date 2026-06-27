@@ -2287,9 +2287,10 @@
                     // Fetch Form Builder config
                     try {
                         const fbDocRef = window.firebaseAPI.doc(window.db, "system", "formBuilderConfig");
-                        const fbDocSnap = await window.firebaseAPI.getDoc(fbDocRef);
-                        if (fbDocSnap.exists()) {
-                            const fbData = fbDocSnap.data();
+                        if (window._fbConfigUnsubscribe) window._fbConfigUnsubscribe();
+                        window._fbConfigUnsubscribe = window.firebaseAPI.onSnapshot(fbDocRef, (fbDocSnap) => {
+                            if (fbDocSnap.exists()) {
+                                const fbData = fbDocSnap.data();
                             if (fbData.fields) {
                                 localStorage.setItem('identify_fb_fields', JSON.stringify(fbData.fields));
                                 if (typeof fb_fields !== 'undefined') fb_fields = fbData.fields;
@@ -2314,9 +2315,10 @@
                                 localStorage.setItem('identify_fb_std_meta', JSON.stringify(fbData.standardMeta));
                                 if (typeof fb_standard_meta !== 'undefined') fb_standard_meta = fbData.standardMeta;
                             }
-                            if (typeof fb_renderForm === 'function') fb_renderForm();
-                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
-                        }
+                                if (typeof fb_renderForm === 'function') fb_renderForm();
+                                if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                            }
+                        });
                     } catch (fbErr) {
                         console.error("Failed to fetch form builder config", fbErr);
                     }
@@ -4675,48 +4677,15 @@
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
 
-                    const saveToSheet = () => {
-                        const localRec = { ...rec };
-                        localRec.createdAt = localRec.createdAt || Date.now();
-                        localRec.updatedAt = Date.now();
-                        localRec._pending = true;
-                        localRec._syncStatus = 'pending';
-                        db = [localRec, ...db.filter(x => x.id !== localRec.id)];
-                        
-                        // Persist to IndexedDB as well for robust offline storage (records + image blob)
-                        try {
-                            idbPut(IDB_STORE_RECORDS, { ...localRec }).catch(() => { });
-                            if (photoData && photoData.startsWith('data:image')) {
-                                const blob = dataUrlToBlob(photoData);
-                                if (blob) {
-                                    const attachId = `${localRec.id}::photo`;
-                                    idbPut(IDB_STORE_ATTACH, { id: attachId, blob: blob, savedAt: Date.now() }).catch(() => { });
-                                }
-                            }
-                        } catch (e) { console.warn('IDB persist failed', e); }
-                        
-                        // Push to Firebase instantly
-                        serverCallSilent('updateRecord', [localRec], () => {
-                            const updatedSource = db.find(r => r.id === localRec.id);
-                            if (updatedSource) {
-                                updatedSource._serverSaved = true;
-                                updatedSource._syncStatus = 'synced';
-                                renderCurrentRecordsPage();
-                            }
-                        });
-                        
-                        finalizeSave();
-                    };
-
                     isPreviewFromSave = !eid;
                     isSavingRecord = false;
                     toggleSaveLoading(false);
                     const _immediatePhotoSrc = _getPreviewPhotoSrc();
-                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc };
+                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc, _isUnsaved: true, _eid: eid };
                     setBlankRecordMode('preview');
 
-                    // Direct local save, skip Drive upload until manual sync
-                    saveToSheet();
+                    // Data is no longer saved locally or remotely here.
+                    // It will be saved when "Save & New" or "Verify" is clicked on the preview card.
                 } catch (error) {
                     console.error('Save error:', error);
                     isSavingRecord = false;
@@ -5569,8 +5538,10 @@
                         } else {
                             let syncIconHtml = '';
                             if (hasDoc || isPreviewVerified) {
-                                if (previewSyncStatus === 'synced' || previewSyncStatus === 'syncing') {
-                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon ${previewSyncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${previewSyncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                                if (previewRecord && previewRecord._serverSaved) {
+                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon" style="font-variation-settings: 'FILL' 0;" title="Saved to Server">cloud_done</span>`;
+                                } else if (previewSyncStatus === 'syncing') {
+                                    syncIconHtml = `<span class="material-symbols-outlined status-drive-icon syncing" style="font-variation-settings: 'FILL' 0;" title="Uploading">cloud_upload</span>`;
                                 }
                             }
                             
@@ -6307,8 +6278,10 @@
                     
                     let syncIconStatusHtml = '';
                     if (!x.isDeleted && (hasDoc || isRecVerified || isReturned)) {
-                        if (syncStatus === 'synced' || syncStatus === 'syncing') {
-                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon ${syncStatus === 'syncing' ? 'syncing' : ''}" style="font-variation-settings: 'FILL' 0;" title="${syncStatus === 'syncing' ? 'Uploading' : 'Synced'}">cloud_upload</span>`;
+                        if (x._serverSaved) {
+                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon" style="font-variation-settings: 'FILL' 0;" title="Saved to Server">cloud_done</span>`;
+                        } else if (syncStatus === 'syncing') {
+                            syncIconStatusHtml = `<span class="material-symbols-outlined status-drive-icon syncing" style="font-variation-settings: 'FILL' 0;" title="Uploading">cloud_upload</span>`;
                         }
                     }
 
@@ -6989,6 +6962,7 @@
             // Verify current previewRecord and move to next pending
             async function verifyAndGoNext() {
                 if (isActionPending) return;
+                commitUnsavedPreviewRecord();
                 if (!previewRecord || !previewRecord.id) return;
                 isActionPending = true;
                 const localRec = { ...previewRecord };
@@ -7111,7 +7085,37 @@
                 }
             }
 
+            function commitUnsavedPreviewRecord() {
+                if (!previewRecord || !previewRecord._isUnsaved) return;
+                previewRecord._isUnsaved = false;
+                
+                const localRec = { ...previewRecord };
+                delete localRec._displayPhotoSrc;
+                delete localRec._isUnsaved;
+                
+                localRec.createdAt = localRec.createdAt || Date.now();
+                localRec.updatedAt = Date.now();
+                localRec._pending = true;
+                localRec._syncStatus = 'pending';
+                
+                try {
+                    idbPut(IDB_STORE_RECORDS, { ...localRec }).catch(() => { });
+                    if (localRec.photoData && localRec.photoData.startsWith('data:image')) {
+                        const blob = dataUrlToBlob(localRec.photoData);
+                        if (blob) {
+                            const attachId = `${localRec.id}::photo`;
+                            idbPut(IDB_STORE_ATTACH, { id: attachId, blob: blob, savedAt: Date.now() }).catch(() => { });
+                        }
+                    }
+                } catch (e) { console.warn('IDB persist failed', e); }
+                
+                addActivity(previewRecord._eid ? 'UPDATE' : 'ADD', localRec);
+                if (!previewRecord._eid) clearDraft();
+                storeRecordInDb(localRec);
+            }
+
             function saveAndNew(skipServerFinalize = false) {
+                commitUnsavedPreviewRecord();
                 const studentName = (previewRecord && previewRecord.studentName) ? previewRecord.studentName.trim() : 'Student';
                 const firstName = studentName.split(' ')[0];
                 const isVerified = previewRecord && previewRecord.verified && String(previewRecord.verified).toLowerCase() !== 'false';
@@ -7119,13 +7123,15 @@
 
                 // Background Finalization
                 if (!skipServerFinalize && previewRecord && previewRecord.id) {
-                    setSyncStatus('Saving ' + firstName + '...', 40);
-                    const finalRec = { ...previewRecord };
-                    serverCallSilent('updateRecord', [finalRec], (res) => {
-                        setSyncStatus(firstName + ' Saved!', 100);
-                        setTimeout(() => setSyncStatus(''), 2000);
-                        loadAllData(() => { filterRecords(); renderHomeAnalysis(); });
-                    });
+                    if (isVerified) {
+                        setSyncStatus('Saving ' + firstName + '...', 40);
+                        const finalRec = { ...previewRecord };
+                        serverCallSilent('updateRecord', [finalRec], (res) => {
+                            setSyncStatus(firstName + ' Saved!', 100);
+                            setTimeout(() => setSyncStatus(''), 2000);
+                            loadAllData(() => { filterRecords(); renderHomeAnalysis(); });
+                        });
+                    }
                     draftServerRecordId = '';
                 }
 
@@ -9546,6 +9552,7 @@
 
     window.savePreviewPopupPhoto = function() {
         if (!previewRecord || !tempPreviewPhotoData) return;
+        commitUnsavedPreviewRecord();
         
         previewRecord.docUrl = tempPreviewPhotoData;
         previewRecord.photoData = tempPreviewPhotoData;
