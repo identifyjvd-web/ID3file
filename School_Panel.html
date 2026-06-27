@@ -4666,9 +4666,11 @@
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
-                        const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
-                        const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
-                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                        if (eid) {
+                            const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
+                            const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
+                            showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                        }
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
