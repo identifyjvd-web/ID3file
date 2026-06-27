@@ -108,13 +108,13 @@
                     <!-- Normal Login Fields -->
                     <div id="login-normal-fields" class="space-y-4">
                         <div>
-                            <label
+                            <label for="login-user-id"
                                 class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                                <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-500"></i> User Name
+                                <i data-lucide="mail" class="w-3.5 h-3.5 text-emerald-500"></i> Admin Email
                             </label>
-                            <input id="login-user-id" type="text"
+                            <input id="login-user-id" type="email"
                                 class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"
-                                placeholder="Enter User Name">
+                                placeholder="Enter Admin Email">
                         </div>
                         <div>
                             <label
@@ -1048,40 +1048,14 @@
 
                     let authUser = null;
                     
-                    const isAdminId = (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'identify.jvd@gmail.com');
+                    const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
+                    const user = userCredential.user;
                     
-                    // If Admin, skip local school login entirely so they don't get trapped as a school if schoolConfig matches
-                    if (!isAdminId && schoolConfig && schoolConfig.loginId && schoolConfig.loginId.toLowerCase() === userId.toLowerCase()) {
-                        const savedPass = schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : schoolConfig.loginPassword;
-                        if (savedPass && savedPass === password) {
-                            authUser = { userId: schoolConfig.loginId, name: schoolConfig.name || 'School', role: 'school', email: schoolConfig.loginId };
-                            saveAuthUser(authUser); // Save to localStorage FIRST to prevent onAuthStateChanged race condition
-                            
-                            // Sign in anonymously to Firebase Auth so Firestore and Storage operations are authenticated
-                            if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
-                                try {
-                                    await window.firebaseAPI.signInAnonymously(window.auth);
-                                } catch (e) {
-                                    console.warn("Failed to sign in anonymously to Firebase:", e);
-                                }
-                            }
-                        }
-                    }
-
-                    if (!authUser) {
-                        // Fallback to Firebase for Admin/Others
-                        let firebaseLoginId = userId;
-                        if (userId.toLowerCase() === 'admin') {
-                            firebaseLoginId = 'identify.jvd@gmail.com'; // Map 'admin' to the actual admin email for Firebase auth
-                        }
-                        const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, firebaseLoginId, password);
-                        const user = userCredential.user;
-                        
-                        if (user.email && (user.email.toLowerCase() === 'admin' || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
-                            authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
-                        } else {
-                            authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School'), role: 'school', email: user.email };
-                        }
+                    if (user.email && user.email.toLowerCase() === 'identify.jvd@gmail.com') {
+                        authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
+                    } else {
+                        // All other emails are treated as Admin role in Admin Panel if they successfully authenticate
+                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'Admin User'), role: 'teacher', viewMode: 'all', email: user.email };
                     }
                     
                     saveAuthUser(authUser);
@@ -1450,16 +1424,8 @@
                         if (savedUser && savedUser.userId === 'school_dev') {
                             firebaseUser = { uid: 'school_dev' };
                         }
-                        if (savedUser && savedUser.role === 'school' && !firebaseUser) {
-                            if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
-                                try {
-                                    const cred = await window.firebaseAPI.signInAnonymously(window.auth);
-                                    firebaseUser = cred.user;
-                                } catch (e) {
-                                    console.warn("Failed auto anonymous sign-in on boot:", e);
-                                }
-                            }
-                        }
+                        // We strictly use Firebase Email/Password Auth, which auto-persists.
+                        // No anonymous login fallback needed.
 
                         if (firebaseUser && savedUser) {
                             currentUser = savedUser;
