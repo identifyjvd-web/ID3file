@@ -28,7 +28,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, limit, setDoc, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
@@ -56,7 +56,7 @@
             window.firebaseAPI = {
                 initializeApp, getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged,
                 db: window.db, auth: window.auth, storage: window.storage, firebaseConfig,
-                collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, setDoc, onSnapshot, getDoc, runTransaction,
+                collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, limit, setDoc, onSnapshot, getDoc, runTransaction,
                 signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, createUserWithEmailAndPassword,
                 getStorage, ref, uploadString, getDownloadURL,
                 firebaseConfig
@@ -73,8 +73,14 @@
 <body class="flex flex-col h-screen">
 
     <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="flex items-center justify-center drop-shadow-2xl">
+        <div class="flex flex-col items-center justify-center drop-shadow-2xl">
             <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
+            <!-- 3 Loading Dots -->
+            <div class="flex space-x-2 justify-center items-center mt-4">
+                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce"></div>
+            </div>
         </div>
     </div>
 
