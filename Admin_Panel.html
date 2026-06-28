@@ -72,7 +72,7 @@
 
 <body class="flex flex-col h-screen">
 
-    <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] hidden flex-col items-center justify-center transition-opacity duration-500">
+    <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
         <div class="flex items-center justify-center drop-shadow-2xl">
             <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
         </div>
@@ -1051,11 +1051,10 @@
                     const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
                     const user = userCredential.user;
                     
-                    if (user.email && user.email.toLowerCase() === 'identify.jvd@gmail.com') {
+                    if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
                         authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
                     } else {
-                        // All other emails are treated as Admin role in Admin Panel if they successfully authenticate
-                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'Admin User'), role: 'teacher', viewMode: 'all', email: user.email };
+                        throw new Error("This email does not have Admin access.");
                     }
                     
                     saveAuthUser(authUser);
@@ -1257,9 +1256,6 @@
                 const email = document.getElementById('manage-school-email')?.value || '';
                 const contactPerson = document.getElementById('manage-school-contact')?.value || '';
                 
-                const schoolId = (document.getElementById('new-school-id').value || '').trim();
-                const password = (document.getElementById('new-school-pass').value || '').trim();
-                
                 const msgEl = document.getElementById('school-create-msg');
                 const btn = document.getElementById('btn-save-manage-school');
 
@@ -1275,17 +1271,8 @@
                     address: address,
                     mobile: mobile,
                     email: email,
-                    contactPerson: contactPerson,
-                    loginId: schoolId
+                    contactPerson: contactPerson
                 };
-                delete newConfig.loginPassword; // Ensure plain text password is removed securely
-                delete newConfig.loginHash; // Remove old one-way hash if exists
-                
-                if (password) {
-                    newConfig.loginEnc = encryptLocal(password);
-                } else if (schoolConfig.loginEnc) {
-                    newConfig.loginEnc = schoolConfig.loginEnc;
-                }
                 
                 if (tempManageSchoolLogo) {
                     newConfig.logo = tempManageSchoolLogo;
@@ -1295,35 +1282,20 @@
                 saveSchoolConfig(newConfig);
                 updateBulkHeader();
 
-                if (schoolId || password) {
-                    if (!schoolId || !password) {
-                        showStatusCard('Notice', 'School Info Saved! But to create login, enter both User ID and Password.', { tone: 'warning', progress: 100, dismissible: true, autoHideMs: 4000 });
-                        return;
-                    }
-                    if (password.length < 6) {
-                        showStatusCard('Notice', 'School Info Saved! But password must be at least 6 characters.', { tone: 'warning', progress: 100, dismissible: true, autoHideMs: 4000 });
-                        return;
-                    }
-
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-                    }
-
-                    setTimeout(() => {
-                        tempManageSchoolLogo = null;
-                        showStatusCard('Success', 'School Details & Local Login Updated Successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details & Access';
-                        }
-                        setBlankRecordMode('settings');
-                    }, 500);
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
                 }
 
-                tempManageSchoolLogo = null;
-                showStatusCard('Success', 'School details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
-                setBlankRecordMode('settings');
+                setTimeout(() => {
+                    tempManageSchoolLogo = null;
+                    showStatusCard('Success', 'School details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details & Access';
+                    }
+                    setBlankRecordMode('settings');
+                }, 500);
             }
 
             async function submitGoogleLogin() {
@@ -2132,13 +2104,28 @@
                         return;
                     }
                     const docRef = window.firebaseAPI.doc(window.db, "system", "schoolConfig");
-                    const docSnap = await window.firebaseAPI.getDoc(docRef);
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        schoolConfig = { ...DEFAULT_CONFIG, ...data };
-                        localStorage.setItem(CONFIG_KEY, JSON.stringify(schoolConfig));
-                        updateBrandingUI();
-                    }
+                    if (window._schoolConfigUnsubscribe) window._schoolConfigUnsubscribe();
+                    window._schoolConfigUnsubscribe = window.firebaseAPI.onSnapshot(docRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            
+                            // Cross-Device Wipe Check
+                            const localWipeTime = parseInt(localStorage.getItem('lastWipeTimestamp') || '0');
+                            if (data.lastWipeTimestamp && data.lastWipeTimestamp > localWipeTime) {
+                                localStorage.setItem('lastWipeTimestamp', data.lastWipeTimestamp);
+                                db = [];
+                                try { localStorage.removeItem('deleted_record_ids'); } catch(e){}
+                                try { if (window.idbClear) idbClear('records').catch(()=>{}); } catch(e){}
+                                if (typeof renderHomeAnalysis === 'function') renderHomeAnalysis();
+                                if (typeof filterRecords === 'function') filterRecords();
+                                if (typeof setBlankRecordMode === 'function') setBlankRecordMode('none');
+                            }
+
+                            schoolConfig = { ...DEFAULT_CONFIG, ...data };
+                            localStorage.setItem(CONFIG_KEY, JSON.stringify(schoolConfig));
+                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                        }
+                    });
                     
                     // Fetch Form Builder config
                     try {
@@ -2725,7 +2712,7 @@
                 filterRow.classList.toggle('hidden', showBlankRecordCard);
                 const isAnyMode = mode !== 'none';
                 
-                if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     icon.className = 'fa-solid fa-arrow-left';
                 } else {
                     icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
@@ -2733,7 +2720,7 @@
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
                 if (addBtnIcon) {
-                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         addBtnIcon.className = 'fa-solid fa-arrow-left text-sm';
                     } else {
                         addBtnIcon.className = isAnyMode ? 'fa-solid fa-xmark text-sm' : 'fa-solid fa-plus text-sm';
@@ -2776,6 +2763,10 @@
                     headerHtml = `<i class="fa-solid fa-school text-[#059669] mr-2.5"></i> Manage School`;
                     labelText = 'Manage School';
                     iconClass = 'fa-solid fa-school text-emerald-600';
+                } else if (mode === 'schoolActivity') {
+                    headerHtml = `<i class="fa-solid fa-clock-rotate-left text-[#059669] mr-2.5"></i> School Activity`;
+                    labelText = 'School Activity';
+                    iconClass = 'fa-solid fa-clock-rotate-left text-[#059669]';
                 } else if (mode === 'dataInfo') {
                     headerHtml = `<i class="fa-solid fa-database text-[#059669] mr-2.5"></i> Data Information`;
                     labelText = 'Data Information';
@@ -2826,7 +2817,7 @@
 
             function closeStudentForm() {
                 // Respect settings page navigation stack
-                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     setBlankRecordMode('settings');
                     previousBlankRecordMode = 'none';
                     return;
@@ -2940,7 +2931,7 @@
                 const shouldForce = (forceOpen === true);
 
                 if (!shouldForce && blankRecordMode !== 'none') {
-                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         setBlankRecordMode('settings');
                         previousBlankRecordMode = 'none';
                         return;
@@ -2982,7 +2973,7 @@
                 
                 // --- Instant SN Reservation ---
                 const nowTs = Date.now();
-                const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                 const deviceInfo = (navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')) ? 'Mobile' : 'Desktop';
                 
                 // Reset ID field
@@ -2991,7 +2982,7 @@
 
                 const nextSn = nowTs;
                 lastFetchedSn = nextSn;
-                const structuredId = `draft_${schoolInitials || "DPS"}-${nextSn}`;
+                const structuredId = `draft_${schoolCode}-${nextSn}`;
                 draftServerRecordId = structuredId;
                 
                 const reservationPayload = {
@@ -3195,12 +3186,12 @@
                     return {
                         'Sn': (() => {
                             const isRecVerified = (r.verified === true || String(r.verified).toLowerCase() === 'true' || r.verified === 'Completed');
-                            const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                            const si = (schoolConfig.code || "DPS").trim().toUpperCase() || "DPS";
                             if (isRecVerified) {
                                 const snVal = r.sn || (index + 1);
                                 return si + String(snVal).padStart(2, '0');
                             } else {
-                                return si + 'DRAFT_' + String(r.createdAt || Date.now()).slice(-6);
+                                return 'DRAFT';
                             }
                         })(),
                         'Id No': r.id || '',
@@ -3518,11 +3509,18 @@
                     `;
                     document.body.appendChild(overlay);
 
-                    serverCallSilent('deleteAllRecords', [], () => {
+                    serverCallSilent('deleteAllRecords', [], async () => {
                         db = [];
                         try { localStorage.removeItem('deleted_record_ids'); } catch(e){}
                         
                         try { if (window.idbClear) idbClear(IDB_STORE_RECORDS).catch(()=>{}); } catch(e){}
+                        
+                        // Send cross-device wipe signal
+                        try {
+                            const sysDoc = window.firebaseAPI.doc(window.db, "system", "schoolConfig");
+                            await window.firebaseAPI.updateDoc(sysDoc, { lastWipeTimestamp: Date.now() });
+                        } catch(e) { console.warn('Could not broadcast wipe signal', e); }
+
                         document.body.removeChild(overlay);
                         showToast('All System Data Deleted Successfully');
                         renderHomeAnalysis();
@@ -5210,6 +5208,55 @@
                     </tr>`;
             }
 
+            async function fetchAndRenderSchoolActivity() {
+                const listEl = document.getElementById('school-activity-list');
+                if (!listEl) return;
+                
+                listEl.innerHTML = '<div class="flex items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+                
+                try {
+                    const { collection, getDocs, query, orderBy, limit } = window.firebaseAPI;
+                    const q = query(collection(window.db, "activityLogs"), orderBy("timestamp", "desc"), limit(50));
+                    const snapshot = await getDocs(q);
+                    
+                    if (snapshot.empty) {
+                        listEl.innerHTML = '<div class="flex flex-col items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-ghost text-4xl mb-3"></i><p>No activity logs found</p></div>';
+                        return;
+                    }
+                    
+                    let html = '<div class="overflow-x-auto"><table class="w-full text-left text-sm text-slate-600"><thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b"><tr><th class="px-4 py-3">Date & Time</th><th class="px-4 py-3">User</th><th class="px-4 py-3">Device</th><th class="px-4 py-3">Location</th></tr></thead><tbody>';
+                    
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        const timeStr = new Date(d.timestamp).toLocaleString();
+                        const deviceIcon = d.deviceInfo === 'Mobile' ? 'fa-mobile-screen-button' : 'fa-desktop';
+                        html += `<tr class="border-b hover:bg-slate-50">
+                            <td class="px-4 py-3 font-medium whitespace-nowrap text-slate-700">${timeStr}</td>
+                            <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-xs font-bold">${d.email ? d.email[0].toUpperCase() : '?'}</div>${d.email || 'Unknown'}</div></td>
+                            <td class="px-4 py-3"><i class="fa-solid ${deviceIcon} text-slate-400 mr-2"></i>${d.deviceInfo || 'Unknown'}</td>
+                            <td class="px-4 py-3 text-slate-500">${d.location || 'Unknown'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    listEl.innerHTML = html;
+                    
+                } catch(err) {
+                    console.error("Failed to fetch activity logs", err);
+                    listEl.innerHTML = '<div class="p-8 text-center text-rose-500">Failed to load logs. You might need to add Firestore index for this query.</div>';
+                }
+            }
+
+            function buildSchoolActivityHtml() {
+                setTimeout(fetchAndRenderSchoolActivity, 100);
+                return `
+                <div class="flex flex-col h-full bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-2">
+                    <div id="school-activity-list" class="flex-1 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-inner">
+                        <div class="flex items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
+                    </div>
+                </div>`;
+            }
+
             function buildDataInformationHtml() {
                 let dataToAnalyze = db;
                 if (currentUser && currentUser.userId === 'admin') {
@@ -5452,12 +5499,12 @@
                                     <i class="fa-solid fa-hashtag text-[#05996c] text-[10px]"></i>
                                     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">SN: ${ (() => {
                                         const isRecVerified = (rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Completed');
-                                        const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                                        const si = (schoolConfig.code || "DPS").trim().toUpperCase() || "DPS";
                                         if (isRecVerified) {
                                             const snVal = rec.sn || '0';
                                             return si + String(snVal).padStart(2, '0');
                                         } else {
-                                            return si + 'DRAFT_' + String(rec.createdAt || Date.now()).slice(-6);
+                                            return 'DRAFT';
                                         }
                                     })() }</div>
                                 </div>
@@ -5567,6 +5614,17 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-amber-500 transition-colors"></i>
                         </div>
 
+                        <div onclick="openSchoolActivity()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-purple-300 group">
+                            <div class="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-sm">
+                                <i class="fa-solid fa-clock-rotate-left text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-black text-slate-800">School Activity</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Login & Device Logs</p>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-purple-500 transition-colors"></i>
+                        </div>
+
                         <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-emerald-300 group">
                             <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
                                 <i class="fa-solid fa-file-export text-xl"></i>
@@ -5609,6 +5667,16 @@
                         const infoEl = document.getElementById('records-page-info');
                         if (countEl) countEl.innerText = '0/0';
                         if (infoEl) infoEl.innerText = 'Page 1 of 1';
+                        lucide.createIcons();
+                        return;
+                    }
+
+                    if (blankRecordMode === 'schoolActivity') {
+                        t.innerHTML = buildSchoolActivityHtml();
+                        const countEl = document.getElementById('showing-count');
+                        const infoEl = document.getElementById('records-page-info');
+                        if (countEl) countEl.innerText = 'Logs';
+                        if (infoEl) infoEl.innerText = 'Live Feed';
                         lucide.createIcons();
                         return;
                     }
@@ -5687,21 +5755,6 @@
                                     </div>
 
                                     <div class="border-t border-slate-100 my-4"></div>
-                                    <h4 class="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-2"><i class="fa-solid fa-lock text-slate-400 mr-1"></i> Login Credentials</h4>
-
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-user-lock"></i> User ID</label>
-                                            <input type="text" id="new-school-id" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition" placeholder="User ID" value="${schoolConfig.loginId || ''}">
-                                        </div>
-                                        <div class="relative">
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
-                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
-                                            <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
-                                                <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
-                                            </button>
-                                        </div>
-                                    </div>
                                     
                                     <div id="school-create-msg" class="hidden text-sm font-bold rounded-xl px-4 py-2 mt-2"></div>
                                     
@@ -6029,9 +6082,7 @@
                 pageItems.forEach((x, idx) => {
                     let displayId = x.id;
                     if (displayId && displayId.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\\s+/).map(w => w[0]).join('').toUpperCase();
-                        const year = new Date().getFullYear().toString().slice(-2);
-                        displayId = `${schoolInitials || "DPS"}${year}DRAFT`;
+                        displayId = 'DRAFT';
                     }
                     const rowId = escapeInlineId(displayId);
                     const initial = (x.studentName || 'S').charAt(0).toUpperCase();
@@ -6591,7 +6642,7 @@
                     let finalRec = { ...localRec };
                     
                     if (finalRec.id.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                        const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
@@ -6621,7 +6672,7 @@
                         }
 
                         const paddedSn = String(nextSn).padStart(3, '0');
-                        const generatedId = `${schoolInitials || "DPS"}${year}${paddedSn}`;
+                        const generatedId = `${schoolCode}${year}${paddedSn}`;
                         
                         finalRec.oldId = finalRec.id;
                         finalRec.id = generatedId;
@@ -6704,7 +6755,7 @@
                     let finalRec = { ...localRec };
                     
                     if (finalRec.id.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                        const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
@@ -6734,7 +6785,7 @@
                         }
 
                         const paddedSn = String(nextSn).padStart(3, '0');
-                        const generatedId = `${schoolInitials || "DPS"}${year}${paddedSn}`;
+                        const generatedId = `${schoolCode}${year}${paddedSn}`;
                         
                         finalRec.oldId = finalRec.id;
                         finalRec.id = generatedId;
@@ -7569,6 +7620,12 @@
             closeSchoolConfig();
             if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
             setBlankRecordMode('dataInfo');
+        }
+
+        function openSchoolActivity() {
+            closeSchoolConfig();
+            if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
+            setBlankRecordMode('schoolActivity');
         }
 
         function openSettingsModal() {

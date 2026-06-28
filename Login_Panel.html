@@ -91,9 +91,9 @@
                     <div id="login-normal-fields" class="space-y-4">
                         <div>
                             <label class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                                <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-500"></i> User Name
+                                <i data-lucide="mail" class="w-3.5 h-3.5 text-emerald-500"></i> Email Address
                             </label>
-                            <input id="login-user-id" type="text" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition" placeholder="Enter User Name">
+                            <input id="login-user-id" type="email" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition" placeholder="Enter Email Address">
                         </div>
                         <div>
                             <label class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
@@ -292,7 +292,7 @@
 
                 if (timerMsgEl) {
                     timerMsgEl.classList.remove('hidden');
-                    let timeLeft = 5;
+                    let timeLeft = 6;
                     timerMsgEl.innerText = `Returning to login page in ${timeLeft} seconds...`;
                     
                     forgotPasswordTimer = setInterval(() => {
@@ -356,13 +356,7 @@
             const btn = document.getElementById('login-submit-btn');
             if (errorEl) errorEl.classList.add('hidden');
             
-            // Bypass logic for development
-            if (userId === '123' && password === '123456') {
-                const devUser = { userId: 'school_dev', name: 'Dev School', role: 'school', email: 'dev_school@gmail.com' };
-                saveAuthUser(devUser);
-                window.location.replace('School_Panel.html');
-                return;
-            }
+
             
             if (!userId) {
                 if (errorEl) {
@@ -389,35 +383,13 @@
                 }
 
                 let authUser = null;
-                const isAdminId = (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'identify.jvd@gmail.com');
+                const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
+                const user = userCredential.user;
                 
-                if (!isAdminId && schoolConfig && schoolConfig.loginId && schoolConfig.loginId.toLowerCase() === userId.toLowerCase()) {
-                    const savedPass = schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : schoolConfig.loginPassword;
-                    if (savedPass && savedPass === password) {
-                        authUser = { userId: schoolConfig.loginId, name: schoolConfig.name || 'School', role: 'school', email: schoolConfig.loginId };
-                        saveAuthUser(authUser);
-                        
-                        if (window.auth && window.firebaseAPI && window.firebaseAPI.signInAnonymously) {
-                            try {
-                                await window.firebaseAPI.signInAnonymously(window.auth);
-                            } catch (e) {}
-                        }
-                    }
-                }
-
-                if (!authUser) {
-                    let firebaseLoginId = userId;
-                    if (userId.toLowerCase() === 'admin') {
-                        firebaseLoginId = 'identify.jvd@gmail.com';
-                    }
-                    const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, firebaseLoginId, password);
-                    const user = userCredential.user;
-                    
-                    if (user.email && (user.email.toLowerCase() === 'admin' || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
-                        authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
-                    } else {
-                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School'), role: 'school', email: user.email };
-                    }
+                if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
+                    authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
+                } else {
+                    authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School User'), role: 'school', email: user.email };
                 }
 
                 saveAuthUser(authUser);
@@ -430,15 +402,22 @@
                 }
             } catch (error) {
                 if (errorEl) {
-                    errorEl.innerText = error.message;
+                    let errMsg = "Authentication failed. Please check your credentials.";
+                    if (error.code === 'auth/invalid-email') errMsg = "The email address you entered is not valid.";
+                    else if (error.code === 'auth/user-not-found') errMsg = "We couldn't find an account matching this email.";
+                    else if (error.code === 'auth/wrong-password') errMsg = "The password you entered is incorrect. Please try again.";
+                    else if (error.code === 'auth/invalid-credential') errMsg = "Invalid email or password. Please try again.";
+                    else if (error.code === 'auth/user-disabled') errMsg = "This account has been temporarily disabled.";
+                    else if (error.code === 'auth/too-many-requests') errMsg = "Too many failed attempts. Please reset your password or try again later.";
+                    else if (error.code === 'auth/network-request-failed') errMsg = "Network error. Please check your internet connection.";
+                    
+                    errorEl.innerText = errMsg;
                     errorEl.classList.remove('hidden');
                 }
-                if (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'identify.jvd@gmail.com') {
-                    adminFailedAttempts++;
-                    if (adminFailedAttempts >= 2) {
-                        const forgotContainer = document.getElementById('forgot-password-container');
-                        if (forgotContainer) forgotContainer.classList.remove('hidden');
-                    }
+                adminFailedAttempts++;
+                if (adminFailedAttempts >= 2) {
+                    const forgotContainer = document.getElementById('forgot-password-container');
+                    if (forgotContainer) forgotContainer.classList.remove('hidden');
                 }
             } finally {
                 if (btn) {

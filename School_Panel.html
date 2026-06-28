@@ -72,7 +72,7 @@
 
 <body class="flex flex-col h-screen">
 
-    <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] hidden flex-col items-center justify-center transition-opacity duration-500">
+    <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
         <div class="flex items-center justify-center drop-shadow-2xl">
             <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
         </div>
@@ -625,6 +625,17 @@
                 }
             };
 
+            async function persistLocalUnverified() {
+                try {
+                    const unverifiedList = (typeof db !== 'undefined' ? db : []).filter(x => {
+                        const isReturned = (x.isDeleted || String(x.verified).toLowerCase() === 'returned' || String(x.status).toLowerCase() === 'returned' || x.returned === true || String(x.returned).toLowerCase() === 'true');
+                        const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
+                        return !isRecVerified;
+                    });
+                    await SchoolLocalDB.set('local_unverified', unverifiedList);
+                } catch(e) { console.warn("Failed to persist local unverified records", e); }
+            }
+
             window.addEventListener('online', async () => {
                 const queue = await SchoolLocalDB.getAllSyncQueue();
                 if (queue.length > 0) {
@@ -1173,14 +1184,20 @@
                     const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
                     const user = userCredential.user;
                     
-                    if (user.email && user.email.toLowerCase() === 'identify.jvd@gmail.com') {
-                        authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
+                    if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
+                        throw new Error("This is an Admin email. Please use the Admin Panel.");
                     } else {
                         // All other emails are treated as School role in School Panel
                         authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School User'), role: 'school', email: user.email };
                     }
                     
                     saveAuthUser(authUser);
+                    
+                    // Fire-and-forget activity log
+                    if (authUser && authUser.email) {
+                        logSchoolActivity(authUser.email);
+                    }
+
                     resetAutoLogoutTimer();
                     showLoginOverlay(false);
                     showTab('records');
@@ -1465,6 +1482,12 @@
                     
                     const authUser = { userId: user.email, name: user.displayName, photo: user.photoURL, role: 'school' };
                     saveAuthUser(authUser);
+                    
+                    // Fire-and-forget activity log
+                    if (authUser && authUser.userId) {
+                        logSchoolActivity(authUser.userId);
+                    }
+
                     resetAutoLogoutTimer();
                     showLoginOverlay(false);
                     showTab('records');
@@ -1497,6 +1520,116 @@
                     lucide.createIcons();
                 }
             }
+            function focusPassword() {
+                const pwdEl = document.getElementById('login-password');
+                if (pwdEl) pwdEl.focus();
+            }
+
+            async function logSchoolActivity(userEmail) {
+                try {
+                    let locationStr = 'Unknown Location';
+                    try {
+                        const res = await fetch('https://ipapi.co/json/');
+                        if (res.ok) {
+                            const data = await res.json();
+                            locationStr = `${data.city || ''}, ${data.region || ''}, ${data.country_name || ''}`.replace(/^, | ,|, $/g, '').trim();
+                        }
+                    } catch(e) {}
+                    
+                    const isMobile = navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad');
+                    
+                    const payload = {
+                        email: userEmail || 'Unknown',
+                        timestamp: Date.now(),
+                        deviceInfo: isMobile ? 'Mobile' : 'Desktop',
+                        userAgent: navigator.userAgent,
+                        location: locationStr || 'Unknown Location'
+                    };
+                    
+                    if (window.firebaseAPI && window.db) {
+                        const { collection, addDoc } = window.firebaseAPI;
+                        await addDoc(collection(window.db, 'activityLogs'), payload);
+                    }
+                } catch(err) {
+                    console.warn("Failed to log school activity", err);
+                }
+            }
+
+            async function loginWithEmail() {
+                const errorEl = document.getElementById('login-error');
+                const btn = document.getElementById('login-btn');
+                const userIdInput = document.getElementById('login-user-id');
+                const passwordInput = document.getElementById('login-password');
+                const userId = userIdInput ? userIdInput.value : '';
+                const password = passwordInput ? passwordInput.value : '';
+                
+                if (errorEl) errorEl.classList.add('hidden');
+                
+                if (!userId || !password) {
+                    if (errorEl) {
+                        errorEl.innerText = 'Please enter both Email and Password';
+                        errorEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin w-5 h-5 flex items-center justify-center"></i> <span>Logging in...</span>';
+                }
+                
+                try {
+                    if (!window.schoolConfig) {
+                        try {
+                            await fetchSystemConfigFromFirebase();
+                        } catch (e) {
+                            console.warn("Could not fetch school config from Firebase on login:", e);
+                        }
+                    }
+
+                    let authUser = null;
+                    
+                    const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
+                    const user = userCredential.user;
+                    
+                    if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
+                        throw new Error("This is an Admin email. Please use the Admin Panel.");
+                    } else {
+                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School User'), role: 'school', email: user.email };
+                    }
+                    
+                    saveAuthUser(authUser);
+                    
+                    if (authUser && authUser.email) {
+                        logSchoolActivity(authUser.email);
+                    }
+
+                    resetAutoLogoutTimer();
+                    showLoginOverlay(false);
+                    showTab('records');
+                    loadAllData();
+                } catch (error) {
+                    if (errorEl) {
+                        errorEl.innerText = error.message;
+                        errorEl.classList.remove('hidden');
+                    }
+                    if (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'identify.jvd@gmail.com') {
+                        adminFailedAttempts++;
+                        if (adminFailedAttempts >= 2) {
+                            const forgotContainer = document.getElementById('forgot-password-container');
+                            if (forgotContainer) forgotContainer.classList.remove('hidden');
+                        }
+                    } else {
+                        adminFailedAttempts = 0;
+                    }
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Login';
+                    }
+                }
+            }
+
             function setupLoginUi() {
                 const versionEl = document.getElementById('login-app-version');
                 const menuVersionEl = document.getElementById('menu-app-version');
@@ -2128,11 +2261,27 @@
                                 mergedDb.push(lRec);
                             }
                         });
-                        db = mergedDb;
-                        demoFallbackLoaded = false;
-                        refreshUiAfterLoad();
+                        SchoolLocalDB.get('local_unverified').then(localUnverified => {
+                            if (localUnverified && Array.isArray(localUnverified)) {
+                                localUnverified.forEach(uRec => {
+                                    if (!mergedDb.some(m => String(m.id) === String(uRec.id) || (m.oldId && String(m.oldId) === String(uRec.id)))) {
+                                        mergedDb.push(uRec);
+                                    }
+                                });
+                            }
+                            db = mergedDb;
+                            demoFallbackLoaded = false;
+                            refreshUiAfterLoad();
+                            if (typeof done === 'function') done();
+                        }).catch(err => {
+                            db = mergedDb;
+                            demoFallbackLoaded = false;
+                            refreshUiAfterLoad();
+                            if (typeof done === 'function') done();
+                        });
+                    } else {
+                        if (typeof done === 'function') done();
                     }
-                    if (typeof done === 'function') done();
                 });
             }
 
@@ -2254,13 +2403,28 @@
                         return;
                     }
                     const docRef = window.firebaseAPI.doc(window.db, "system", "schoolConfig");
-                    const docSnap = await window.firebaseAPI.getDoc(docRef);
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        schoolConfig = { ...DEFAULT_CONFIG, ...data };
-                        localStorage.setItem(CONFIG_KEY, JSON.stringify(schoolConfig));
-                        updateBrandingUI();
-                    }
+                    if (window._schoolConfigUnsubscribe) window._schoolConfigUnsubscribe();
+                    window._schoolConfigUnsubscribe = window.firebaseAPI.onSnapshot(docRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            
+                            // Cross-Device Wipe Check
+                            const localWipeTime = parseInt(localStorage.getItem('lastWipeTimestamp') || '0');
+                            if (data.lastWipeTimestamp && data.lastWipeTimestamp > localWipeTime) {
+                                localStorage.setItem('lastWipeTimestamp', data.lastWipeTimestamp);
+                                db = [];
+                                try { localStorage.removeItem('deleted_record_ids'); } catch(e){}
+                                try { if (window.idbClear) idbClear('records').catch(()=>{}); } catch(e){}
+                                if (typeof renderHomeAnalysis === 'function') renderHomeAnalysis();
+                                if (typeof filterRecords === 'function') filterRecords();
+                                if (typeof setBlankRecordMode === 'function') setBlankRecordMode('none');
+                            }
+
+                            schoolConfig = { ...DEFAULT_CONFIG, ...data };
+                            localStorage.setItem(CONFIG_KEY, JSON.stringify(schoolConfig));
+                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                        }
+                    });
                     
                     // Fetch Form Builder config
                     try {
@@ -3107,7 +3271,7 @@
                 
                 // --- Instant SN Reservation ---
                 const nowTs = Date.now();
-                const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                 const deviceInfo = (navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')) ? 'Mobile' : 'Desktop';
                 
                 // Reset ID field
@@ -3116,7 +3280,7 @@
 
                 const nextSn = nowTs;
                 lastFetchedSn = nextSn;
-                const structuredId = `draft_${schoolInitials || "DPS"}-${nextSn}`;
+                const structuredId = `draft_${schoolCode}-${nextSn}`;
                 draftServerRecordId = structuredId;
                 
                 const reservationPayload = {
@@ -6244,9 +6408,7 @@
                 pageItems.forEach((x, idx) => {
                     let displayId = x.id;
                     if (displayId && displayId.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\\s+/).map(w => w[0]).join('').toUpperCase();
-                        const year = new Date().getFullYear().toString().slice(-2);
-                        displayId = `${schoolInitials || "DPS"}${year}DRAFT`;
+                        displayId = 'DRAFT';
                     }
                     const rowId = escapeInlineId(displayId);
                     const initial = (x.studentName || 'S').charAt(0).toUpperCase();
@@ -6512,7 +6674,7 @@
                 const binBadge = document.getElementById('bin-count-text');
                 if (binBadge) binBadge.innerText = binTotal;
             }
-            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRenderLimit = 30; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); }
+            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRenderLimit = 30; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); persistLocalUnverified(); }
             window.addEventListener('storage', (event) => {
                 if (event.key === RECORD_UPDATES_KEY) refreshDatabaseAfterCertificateUpdate();
                 if (event.key && event.key.startsWith('identify_fb_')) {
@@ -6857,20 +7019,21 @@
                     let finalRec = { ...localRec };
                     
                     if (finalRec.id.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                        const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
-                        db.forEach(x => { if (x.sn && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
-                        const savedSn = parseInt(localStorage.getItem(SN_KEY)) || 0;
-                        if (savedSn > localMaxSn) localMaxSn = savedSn;
+                        db.forEach(r => {
+                            if (r.id && !r.id.startsWith('draft_') && typeof r.sn === 'number') {
+                                if (r.sn > localMaxSn) localMaxSn = r.sn;
+                            }
+                        });
                         
                         let nextSn;
                         try {
                             nextSn = await new Promise((resolve, reject) => {
                                 serverCall('generateId', [localMaxSn], resolve, reject);
                             });
-                            try { localStorage.setItem(SN_KEY, nextSn); } catch(e){}
                         } catch(e) {
                             console.error('Background ID generation failed:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
@@ -6887,7 +7050,7 @@
                         }
                         
                         const paddedSn = String(nextSn).padStart(3, '0');
-                        const generatedId = `${schoolInitials || "DPS"}${year}${paddedSn}`;
+                        const generatedId = `${schoolCode}${year}${paddedSn}`;
                         
                         finalRec.oldId = finalRec.id;
                         finalRec.id = generatedId;
@@ -6977,20 +7140,21 @@
                     let finalRec = { ...localRec };
                     
                     if (finalRec.id.startsWith('draft_')) {
-                        const schoolInitials = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w => w[0]).join('').toUpperCase();
+                        const schoolCode = (schoolConfig.code || "DPS").trim().toUpperCase();
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
-                        db.forEach(x => { if (x.sn && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
-                        const savedSn = parseInt(localStorage.getItem(SN_KEY)) || 0;
-                        if (savedSn > localMaxSn) localMaxSn = savedSn;
+                        db.forEach(r => {
+                            if (r.id && !r.id.startsWith('draft_') && typeof r.sn === 'number') {
+                                if (r.sn > localMaxSn) localMaxSn = r.sn;
+                            }
+                        });
                         
                         let nextSn;
                         try {
                             nextSn = await new Promise((resolve, reject) => {
                                 serverCall('generateId', [localMaxSn], resolve, reject);
                             });
-                            try { localStorage.setItem(SN_KEY, nextSn); } catch(e){}
                         } catch(e) {
                             console.error('Background ID generation failed in verifyAndGoNext:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
@@ -7007,7 +7171,7 @@
                         }
 
                         const paddedSn = String(nextSn).padStart(3, '0');
-                        const generatedId = `${schoolInitials || "DPS"}${year}${paddedSn}`;
+                        const generatedId = `${schoolCode}${year}${paddedSn}`;
                         
                         finalRec.oldId = finalRec.id;
                         finalRec.id = generatedId;
