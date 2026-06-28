@@ -19,5 +19,19 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "School Panel",
+      "short_name": "School",
+      "description": "Open School Data Entry Panel",
+      "url": "/School_Panel.html"
+    },
+    {
+      "name": "Admin Panel",
+      "short_name": "Admin",
+      "description": "Open Admin Dashboard",
+      "url": "/Admin_Panel.html"
+    }
   ]
 }
