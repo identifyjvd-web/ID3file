@@ -74,14 +74,14 @@
 <body class="flex flex-col h-screen">
 
     <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="flex flex-col items-center justify-center drop-shadow-2xl -mt-24">
+        <div class="flex flex-col items-center justify-center drop-shadow-2xl -mt-32">
             <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
-            <!-- 3 Loading Dots -->
-            <div class="flex space-x-3 justify-center items-center mt-4">
-                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce"></div>
-            </div>
+        </div>
+        <!-- 3 Loading Dots -->
+        <div class="absolute bottom-16 flex space-x-3 justify-center items-center">
+            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce"></div>
         </div>
     </div>
 
@@ -277,6 +277,10 @@
 
                             <button id="btn-bulk-export" class="hidden w-10 h-10 shrink-0 rounded-full bg-purple-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm" title="Export Selected to ZIP" onclick="bulkExportSelected()">
                                 <i class="fa-solid fa-file-export text-[16px]"></i>
+                            </button>
+                            
+                            <button id="btn-bulk-download-jpg" class="hidden w-10 h-10 shrink-0 rounded-full bg-amber-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm" title="Download Selected as JPG" onclick="bulkDownloadSelectedJpg()">
+                                <i class="fa-solid fa-image text-[16px]"></i>
                             </button>
                         </div>
                         <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
@@ -767,6 +771,7 @@
                                 let currentSn = 0;
                                 if (sfDoc.exists()) {
                                     currentSn = sfDoc.data().value || 0;
+                                    if (currentSn > 1000000000) currentSn = 0;
                                 }
                                 const nextSn = Math.max(currentSn, localMaxSn) + 1;
                                 transaction.set(counterRef, { value: nextSn }, { merge: true });
@@ -869,10 +874,11 @@
                     if (toggleBtn) {
                         toggleBtn.style.display = '';
                         toggleBtn.style.width = '36px';
-                        if (blankRecordMode === 'none') {
-                            toggleBtn.onclick = confirmLogout;
-                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
-                        } else {
+                            if (blankRecordMode === 'none') {
+                                toggleBtn.onclick = confirmLogout;
+                                toggleBtn.className = 'w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold text-xs active:scale-95 transition-transform overflow-hidden p-0 border-2 border-rose-600';
+                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
+                            } else {
                             toggleBtn.onclick = () => closeStudentForm();
                             toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
                         }
@@ -1256,13 +1262,18 @@
             }
 
             async function saveAllManageSchoolDetails() {
-                const name = document.getElementById('manage-school-name')?.value || '';
-                const code = document.getElementById('manage-school-code')?.value || '';
-                const address = document.getElementById('manage-school-address')?.value || '';
-                const mobile = document.getElementById('manage-school-mobile')?.value || '';
-                const email = document.getElementById('manage-school-email')?.value || '';
-                const contactPerson = document.getElementById('manage-school-contact')?.value || '';
-                
+                const name = document.getElementById('manage-school-name')?.value || schoolConfig.name || '';
+                const code = document.getElementById('manage-school-code')?.value || schoolConfig.code || '';
+                const address = document.getElementById('manage-school-address')?.value || schoolConfig.address || '';
+                const contactPerson = document.getElementById('manage-school-contact')?.value || schoolConfig.contactPerson || '';
+                const mobile = document.getElementById('manage-school-mobile')?.value || schoolConfig.mobile || '';
+                const email = document.getElementById('manage-school-email')?.value || schoolConfig.email || '';
+                const whatsapp = document.getElementById('manage-school-whatsapp')?.value || schoolConfig.whatsapp || '';
+                const instagram = document.getElementById('manage-school-instagram')?.value || schoolConfig.instagram || '';
+                const youtube = document.getElementById('manage-school-youtube')?.value || schoolConfig.youtube || '';
+                const facebook = document.getElementById('manage-school-facebook')?.value || schoolConfig.facebook || '';
+                const systemAbout = document.getElementById('manage-system-about')?.value || schoolConfig.systemAbout || schoolConfig.about || '';
+
                 const msgEl = document.getElementById('school-create-msg');
                 const btn = document.getElementById('btn-save-manage-school');
 
@@ -1276,11 +1287,16 @@
                     name: name,
                     code: code,
                     address: address,
+                    contactPerson: contactPerson,
                     mobile: mobile,
                     email: email,
-                    contactPerson: contactPerson
+                    whatsapp: whatsapp,
+                    instagram: instagram,
+                    youtube: youtube,
+                    facebook: facebook,
+                    systemAbout: systemAbout
                 };
-                
+
                 if (tempManageSchoolLogo) {
                     newConfig.logo = tempManageSchoolLogo;
                 } else if (tempManageSchoolLogo === '') {
@@ -1296,10 +1312,10 @@
 
                 setTimeout(() => {
                     tempManageSchoolLogo = null;
-                    showStatusCard('Success', 'School details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
+                    showStatusCard('Success', 'Details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
                     if (btn) {
                         btn.disabled = false;
-                        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details & Access';
+                        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details';
                     }
                     setBlankRecordMode('settings');
                 }, 500);
@@ -2233,7 +2249,7 @@
                 nameEls.forEach(id => { const el = document.getElementById(id); if (el) el.innerText = schoolConfig.name; });
                 const codeEl = document.getElementById('config-code'); if (codeEl) codeEl.value = schoolConfig.code;
                 const nameInput = document.getElementById('config-name'); if (nameInput) nameInput.value = schoolConfig.name;
-                const aboutEl = document.getElementById('settings-about-display'); if (aboutEl) aboutEl.innerText = schoolConfig.about;
+                const aboutEl = document.getElementById('settings-about-display'); if (aboutEl) aboutEl.innerText = (schoolConfig.systemAbout || schoolConfig.about);
                 document.title = "IDentify-" + (schoolConfig.code || "DPS");
 
                 if (schoolConfig.logo) {
@@ -2757,7 +2773,7 @@
                 filterRow.classList.toggle('hidden', showBlankRecordCard);
                 const isAnyMode = mode !== 'none';
                 
-                if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((mode === 'builder' || mode === 'manage_school' || mode === 'edit_about' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     icon.className = 'fa-solid fa-arrow-left';
                 } else {
                     icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
@@ -2765,7 +2781,7 @@
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
                 if (addBtnIcon) {
-                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'edit_about' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         addBtnIcon.className = 'fa-solid fa-arrow-left text-sm';
                     } else {
                         addBtnIcon.className = isAnyMode ? 'fa-solid fa-xmark text-sm' : 'fa-solid fa-plus text-sm';
@@ -2808,6 +2824,10 @@
                     headerHtml = `<i class="fa-solid fa-school text-[#059669] mr-2.5"></i> Manage School`;
                     labelText = 'Manage School';
                     iconClass = 'fa-solid fa-school text-emerald-600';
+                } else if (mode === 'edit_about') {
+                    headerHtml = `<i class="fa-solid fa-pen-to-square text-[#059669] mr-2.5"></i> Edit System About`;
+                    labelText = 'Edit System About';
+                    iconClass = 'fa-solid fa-pen-to-square text-emerald-600';
                 } else if (mode === 'schoolActivity') {
                     headerHtml = `<i class="fa-solid fa-clock-rotate-left text-[#059669] mr-2.5"></i> School Activity`;
                     labelText = 'School Activity';
@@ -2862,7 +2882,7 @@
 
             function closeStudentForm() {
                 // Respect settings page navigation stack
-                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'edit_about' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     setBlankRecordMode('settings');
                     previousBlankRecordMode = 'none';
                     return;
@@ -2959,10 +2979,10 @@
                 if (icon && icon.classList.contains('fa-magnifying-glass') && forceOpen !== true) {
                     filterRecords();
                     
-                    icon.className = 'fa-solid fa-right-from-bracket';
+                    icon.className = 'fa-solid fa-right-from-bracket text-white';
                     const btn = document.getElementById('toggle-form-btn');
                     if (btn) {
-                        btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                        btn.className = 'w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                         btn.onclick = confirmLogout;
                     }
                     if (typeof dbSearchTimer !== 'undefined' && dbSearchTimer) clearTimeout(dbSearchTimer);
@@ -2976,7 +2996,7 @@
                 const shouldForce = (forceOpen === true);
 
                 if (!shouldForce && blankRecordMode !== 'none') {
-                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'edit_about' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         setBlankRecordMode('settings');
                         previousBlankRecordMode = 'none';
                         return;
@@ -3062,20 +3082,20 @@
                 const formOpen = !!wrapper && !wrapper.classList.contains('hidden');
                 if (formOpen || blankRecordMode !== 'none') return;
 
-                if (search.value.trim().length > 0) {
+                    if (search.value.trim().length > 0) {
                     icon.className = 'fa-solid fa-magnifying-glass';
                     btn.className = 'w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                     btn.onclick = () => toggleStudentForm();
-                    
+
                     if (dbSearchTimer) clearTimeout(dbSearchTimer);
                     dbSearchTimer = setTimeout(() => {
-                        icon.className = 'fa-solid fa-right-from-bracket';
-                        btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                        icon.className = 'fa-solid fa-right-from-bracket text-white';
+                        btn.className = 'w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                         btn.onclick = confirmLogout;
                     }, 7000);
                 } else {
-                    icon.className = 'fa-solid fa-right-from-bracket';
-                    btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                    icon.className = 'fa-solid fa-right-from-bracket text-white';
+                    btn.className = 'w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                     btn.onclick = confirmLogout;
                     if (dbSearchTimer) clearTimeout(dbSearchTimer);
                     
@@ -3295,7 +3315,7 @@
                     });
                     if (records.length === 0) { showModal('error', 'Failed', 'No valid student records found.'); closeAllMenus(); input.value = ''; return; }
                     serverCall('addManyRecords', [records], (count) => {
-                        showToast(`Imported ${count || records.length} records`);
+                        showModal('success', 'Import Successful', `Successfully imported ${count || records.length} records into the system.`);
                         loadAllData();
                         closeAllMenus(); input.value = '';
                     });
@@ -3307,6 +3327,15 @@
             let binSelectedRecords = new Set();
             let binLpTimer = null;
             let binLpDidTrigger = false;
+
+            function triggerBinSelection(id) {
+                if (binSelectedRecords.size === 0) {
+                    binLpDidTrigger = true;
+                    binSelectedRecords.add(String(id));
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    renderRecycleBin();
+                }
+            }
 
             function binLpStart(id) {
                 if (binSelectedRecords.size > 0) return;
@@ -3437,7 +3466,7 @@
                         const isRecVerified = x.verified === true || String(x.verified).toLowerCase() === 'true';
                         
                         container.innerHTML += `
-                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''}>
+                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40 bin-selection-zone select-none" style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: pan-y;" data-id="${escapeInlineId(x.id)}" oncontextmenu="event.preventDefault(); triggerBinSelection('${escapeInlineId(x.id)}'); return false;" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''}>
                                 <div class="flex flex-1 items-stretch min-w-0">
                                     <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
                                         ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
@@ -3447,7 +3476,7 @@
                                         <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
                                     </div>
                                 </div>
-                                <div class="px-4 flex items-center justify-end gap-3 min-w-[120px] bin-selection-zone" data-id="${escapeInlineId(x.id)}">
+                                <div class="px-4 flex items-center justify-end gap-3 min-w-[120px]">
                                     <div class="flex flex-col items-end justify-center gap-0.5">
                                         <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
                                         <div class="flex items-center gap-1 opacity-60">
@@ -4642,6 +4671,15 @@
                             exportBtn.classList.add('hidden');
                         }
                     }
+                    
+                    const downloadJpgBtn = document.getElementById('btn-bulk-download-jpg');
+                    if (downloadJpgBtn) {
+                        if (currentUser && currentUser.userId === 'admin' && activeStatusFilter === 'verified') {
+                            downloadJpgBtn.classList.remove('hidden');
+                        } else {
+                            downloadJpgBtn.classList.add('hidden');
+                        }
+                    }
                     if (deleteBtn) {
                         if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified') {
                             deleteBtn.classList.remove('hidden');
@@ -4675,6 +4713,7 @@
                             toggleBtn.style.width = '36px';
                             if (blankRecordMode === 'none') {
                                 toggleBtn.onclick = confirmLogout;
+                                toggleBtn.className = 'w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
                                 toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-right-from-bracket text-sm"></i>`;
                             } else {
                                 toggleBtn.onclick = () => closeStudentForm();
@@ -4838,7 +4877,89 @@
                 }, 'Yes, Send');
             }
 
-                        async function bulkExportSelected() {
+            async function bulkDownloadSelectedJpg() {
+                if (selectedRecords.size === 0) return;
+                
+                const count = selectedRecords.size;
+                const btn = document.getElementById('btn-bulk-download-jpg');
+                const origHtml = btn ? btn.innerHTML : '';
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[16px]"></i>';
+                
+                const origMode = blankRecordMode;
+                const origPreview = previewRecord;
+                
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh';
+                overlay.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+                overlay.style.zIndex = '999999';
+                overlay.style.display = 'flex'; overlay.style.flexDirection = 'column'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.color = 'white';
+                overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-5xl mb-6 text-amber-500"></i><div id="bulk-jpg-progress" class="text-2xl font-black tracking-widest uppercase">Generating 0 / ' + count + '</div><div class="text-sm text-slate-400 mt-2">Please do not close this window</div>';
+                document.body.appendChild(overlay);
+
+                try {
+                    const zip = new JSZip();
+                    const folder = zip.folder("ID_Cards_JPG");
+                    let doneCount = 0;
+                    
+                    const recordsToExport = [];
+                    selectedRecords.forEach(id => {
+                        const rec = db.find(x => String(x.id) === String(id));
+                        if (rec) recordsToExport.push(rec);
+                    });
+
+                    for (let i = 0; i < recordsToExport.length; i++) {
+                        const rec = recordsToExport[i];
+                        doneCount++;
+                        document.getElementById('bulk-jpg-progress').innerText = `Generating ${doneCount} / ${count}`;
+                        
+                        previewRecord = rec;
+                        setBlankRecordMode('preview'); 
+                        
+                        // Wait for render and images to load
+                        await new Promise(res => setTimeout(res, 400));
+                        
+                        const card = document.querySelector('.preview-dark-card');
+                        if (card) {
+                            const actionBars = card.querySelectorAll('.preview-action-bar');
+                            actionBars.forEach(bar => bar.style.display = 'none');
+                            
+                            const canvas = await html2canvas(card, { scale: 2, useCORS: true, backgroundColor: '#1e293b' });
+                            
+                            actionBars.forEach(bar => bar.style.display = '');
+                            
+                            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                            const sn = rec.sn ? rec.sn : 'Unknown';
+                            const safeName = (rec.studentName || rec.name || 'Unknown').replace(/[^a-zA-Z0-9\s]/g, '_').trim();
+                            folder.file(`ID_Card_${sn}_${safeName}.jpg`, imgData.split(',')[1], {base64: true});
+                        }
+                    }
+                    
+                    document.getElementById('bulk-jpg-progress').innerText = "Zipping Files...";
+                    const content = await zip.generateAsync({type:"blob"});
+                    const downloadLink = document.createElement("a");
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = `ID_Cards_${new Date().toISOString().split('T')[0]}.zip`;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    showToast("Downloaded Successfully!");
+                } catch (e) {
+                    console.error("Bulk JPG Error:", e);
+                    showToast("Error generating JPGs", true);
+                } finally {
+                    if (btn) btn.innerHTML = origHtml;
+                    document.body.removeChild(overlay);
+                    previewRecord = origPreview;
+                    setBlankRecordMode(origMode);
+                    if (origMode === 'none') {
+                        renderCurrentRecordsPage();
+                    }
+                }
+            }
+
+            async function bulkExportSelected() {
                 if (selectedRecords.size === 0) return;
                 
                 showToast("Preparing Export... Please wait.");
@@ -5481,6 +5602,11 @@
                             </div>`;
                         }
 
+                        const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
+                        const pWidth = pMeta.width || 600;
+                        const pHeight = pMeta.height || 800;
+                        const aspectStyle = `aspect-ratio: ${pWidth} / ${pHeight};`;
+
                         t.innerHTML = `
                 <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 relative" ${isPreviewFromSave ? '' : 'onmousedown="handlePreviewTouchStart(event)" onmouseup="handlePreviewTouchEnd(event)" onmouseleave="handlePreviewTouchCancel(event)" ontouchstart="handlePreviewTouchStart(event)" ontouchend="handlePreviewTouchEnd(event)" ontouchcancel="handlePreviewTouchCancel(event)"'}>
                     
@@ -5500,7 +5626,7 @@
 
                         <!-- Photo Section -->
                         <div class="flex justify-center mb-4 mt-2 relative z-20">
-                            <div class="premium-photo-frame !w-[150px] !h-auto !aspect-[3/4] bg-white relative">
+                            <div class="premium-photo-frame !w-[150px] !h-auto bg-white relative" style="${aspectStyle}">
                                 <img src="${docRes}" class="${hasDoc ? '' : 'hidden'} w-full h-full object-cover">
                                 <div class="flex items-center justify-center h-full w-full ${hasDoc ? 'hidden' : ''}">
                                     <i class="fa-solid fa-user-tie text-[#05996c] text-[130px]"></i>
@@ -5518,14 +5644,20 @@
                         
                         <!-- Details Section (Main Card) -->
                         <div class="preview-details-box mb-2">
-                            ${renderPreviewRow('fa-person', (rec.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o', rec.fatherName)}
-                            ${renderPreviewRow('fa-book', 'Class', rec.sclass)}
-                            ${renderPreviewRow('fa-venus-mars', 'Gender', rec.gender)}
-                            ${renderPreviewRow('fa-calendar-day', 'DOB', rec.dob)}
+                            ${(() => {
+                                const isEnabled = (id) => typeof fb_standard_config !== 'undefined' && fb_standard_config[id] ? fb_standard_config[id].enabled !== false : true;
+                                let html = '';
+                                if (isEnabled('fatherName')) html += renderPreviewRow('fa-person', (rec.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o', rec.fatherName);
+                                if (isEnabled('sclass')) html += renderPreviewRow('fa-book', 'Class', rec.sclass);
+                                if (isEnabled('gender')) html += renderPreviewRow('fa-venus-mars', 'Gender', rec.gender);
+                                if (isEnabled('dob')) html += renderPreviewRow('fa-calendar-day', 'DOB', rec.dob);
+                                return html;
+                            })()}
                             ${(() => {
                                 const order = (typeof fb_form_order !== 'undefined' && Array.isArray(fb_form_order) && fb_form_order.length > 0) ? fb_form_order : ['mobile', 'aadhar', 'address'];
                                 const fixedTop = ['photo', 'studentName', 'fatherName', 'sclass', 'gender', 'dob'];
-                                return order.filter(id => !fixedTop.includes(id)).map(id => {
+                                const isEnabled = (id) => typeof fb_standard_config !== 'undefined' && fb_standard_config[id] ? fb_standard_config[id].enabled !== false : true;
+                                return order.filter(id => !fixedTop.includes(id) && isEnabled(id)).map(id => {
                                     if (id === 'mobile') return renderPreviewRow('fa-mobile-screen', 'Mobile', rec.mobile);
                                     if (id === 'aadhar') return renderPreviewRow('fa-fingerprint', 'Aadhar', rec.aadhar);
                                     if (id === 'address') return renderPreviewRow('fa-location-dot', 'Address', rec.address);
@@ -5689,6 +5821,18 @@
                         </div>
                         ` : ''}
 
+                        ${(currentUser && currentUser.userId === 'admin') ? `
+                        <div onclick="closeSchoolConfig(); setTimeout(()=>setBlankRecordMode('edit_about'),60)" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-blue-300 group">
+                            <div class="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                <i class="fa-solid fa-pen-to-square text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-black text-slate-800">Edit System About</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Edit system/about text (admin)</p>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-blue-500 transition-colors"></i>
+                        </div>
+                        ` : ''}
 
                         <!-- Added Logout Button -->
                         <div onclick="logoutUser()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-rose-300 group">
@@ -5795,17 +5939,110 @@
                                     </div>
 
                                     <div class="border-t border-slate-100 my-4"></div>
+                                    <h4 class="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-2"><i class="fa-solid fa-lock text-slate-400 mr-1"></i> Login Credentials</h4>
+
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-user-lock"></i> User ID</label>
+                                            <input type="text" id="new-school-id" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition" placeholder="User ID" value="${schoolConfig.loginId || ''}">
+                                        </div>
+                                        <div class="relative">
+                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
+                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
+                                            <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
+                                                <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                     
                                     <div id="school-create-msg" class="hidden text-sm font-bold rounded-xl px-4 py-2 mt-2"></div>
                                     
                                     <button id="btn-save-manage-school" onclick="saveAllManageSchoolDetails()" class="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm">
-                                        <i class="fa-solid fa-floppy-disk"></i> Save Details & Access
+                                        <i class="fa-solid fa-floppy-disk"></i> Save Details
                                     </button>
                                 </div>
                             </div>
                         `;
                         const countEl = document.getElementById('showing-count');
                         if (countEl) countEl.innerText = 'Manage';
+                        lucide.createIcons();
+                        return;
+                    }
+
+                    if (blankRecordMode === 'edit_about') {
+                        t.innerHTML = `
+                            <div class="p-6 bg-white rounded-3xl system-card flex flex-col items-start w-full max-w-md mx-auto">
+                                <div class="w-full space-y-4">
+                                    <div class="flex gap-4 items-center">
+                                        <div class="w-24 h-24 rounded-3xl bg-slate-50 border-2 border-dashed border-emerald-200 flex items-center justify-center cursor-pointer relative overflow-hidden shrink-0 hover:bg-emerald-50 transition group" onclick="document.getElementById('manage-school-logo').click()">
+                                            ${schoolConfig.logo ? `
+                                                <img src="${schoolConfig.logo}" id="manage-logo-preview-img" class="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none">
+                                                <button type="button" id="manage-logo-remove-btn" onclick="event.stopPropagation(); removeManageSchoolLogo();" class="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center z-20 shadow-md transform transition-transform opacity-0 group-hover:opacity-100">
+                                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                                </button>
+                                            ` : `
+                                                <img src="" id="manage-logo-preview-img" class="absolute inset-0 w-full h-full object-cover z-10 hidden pointer-events-none">
+                                                <button type="button" id="manage-logo-remove-btn" onclick="event.stopPropagation(); removeManageSchoolLogo();" class="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center z-20 shadow-md transform transition-transform hidden">
+                                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                                </button>
+                                            `}
+                                            <i class="fa-solid fa-cloud-arrow-up text-emerald-400 text-xl mb-1 z-0"></i>
+                                            <span class="text-[9px] font-bold text-slate-400 z-0">PROFILE PHOTO</span>
+                                            <input type="file" id="manage-school-logo" accept="image/*" class="hidden" onchange="previewManageSchoolLogo(event)">
+                                        </div>
+                                        <div class="flex-1 space-y-2">
+                                            <div>
+                                                <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-phone"></i> Mobile No</label>
+                                                <input type="text" id="manage-school-mobile" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Phone" value="${schoolConfig.mobile || ''}">
+                                            </div>
+                                            <div>
+                                                <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-envelope"></i> Email</label>
+                                                <input type="email" id="manage-school-email" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Email" value="${schoolConfig.email || ''}">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-map-location-dot"></i> Address</label>
+                                        <input type="text" id="manage-school-address" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Full address" value="${schoolConfig.address || ''}">
+                                    </div>
+
+                                    <div>
+                                        <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-whatsapp"></i> WhatsApp No</label>
+                                        <input type="text" id="manage-school-whatsapp" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Enter number" value="${schoolConfig.whatsapp || ''}">
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-instagram"></i> Instagram</label>
+                                            <input type="text" id="manage-school-instagram" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Instagram URL" value="${schoolConfig.instagram || ''}">
+                                        </div>
+                                        <div>
+                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-youtube"></i> YouTube</label>
+                                            <input type="text" id="manage-school-youtube" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="YouTube URL" value="${schoolConfig.youtube || ''}">
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-facebook-f"></i> Facebook</label>
+                                        <input type="text" id="manage-school-facebook" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Facebook URL" value="${schoolConfig.facebook || ''}">
+                                    </div>
+
+                                    <div>
+                                        <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-circle-info"></i> System About (Admin)</label>
+                                        <textarea id="manage-system-about" rows="4" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Enter system/about text for admin footer">${schoolConfig.systemAbout || schoolConfig.about || ''}</textarea>
+                                    </div>
+
+                                    <div id="school-create-msg" class="hidden text-sm font-bold rounded-xl px-4 py-2 mt-2"></div>
+
+                                    <button id="btn-save-manage-school" onclick="saveAllManageSchoolDetails()" class="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm">
+                                        <i class="fa-solid fa-floppy-disk"></i> Save Details
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        const countEl = document.getElementById('showing-count');
+                        if (countEl) countEl.innerText = 'About';
                         lucide.createIcons();
                         return;
                     }
@@ -6028,8 +6265,12 @@
 
                 <div class="p-6 bg-transparent relative z-10">
                     <div class="flex gap-6 mb-6 ${(!photoCfg.enabled && !classCfg.enabled && !genderCfg.enabled) ? 'hidden' : ''}">
-                        ${photoCfg.enabled ? `
-                        <div class="premium-photo-frame" onclick="handleFrameClick(event)">
+                        ${photoCfg.enabled ? (() => {
+                            const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
+                            const pWidth = pMeta.width || 600;
+                            const pHeight = pMeta.height || 800;
+                            return `
+                        <div class="premium-photo-frame" onclick="handleFrameClick(event)" style="aspect-ratio: ${pWidth} / ${pHeight};">
                             <img id="blank-photo-preview-img" src="${photoSrc}" class="${isPhotoPresent ? '' : 'hidden'} w-full h-full object-cover">
                             <div id="blank-photo-placeholder" class="flex items-center justify-center h-full w-full" style="${isPhotoPresent ? 'display:none' : ''}">
                                 <i class="fa-solid fa-user-tie text-[#05996c] text-[150px]"></i>
@@ -6040,7 +6281,8 @@
                             <button id="blank-remove-photo-btn" type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
-                        </div>` : ''}
+                        </div>`;
+                        })() : ''}
                         
                         <div class="flex-1 flex flex-col justify-between py-0.5">
                             ${photoCfg.enabled ? `
@@ -6686,7 +6928,7 @@
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
-                        db.forEach(x => { if (x.sn && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
+                        db.forEach(x => { if (x.id && !x.id.startsWith('draft_') && x.sn && Number(x.sn) < 1000000000 && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
                         const savedSn = parseInt(localStorage.getItem(SN_KEY)) || 0;
                         if (savedSn > localMaxSn) localMaxSn = savedSn;
                         
@@ -7710,7 +7952,6 @@
             closeSchoolConfig();
             if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
             
-            // Fetch the latest config from Firestore to make sure we show the current credentials
             if (typeof fetchSystemConfigFromFirebase === 'function') {
                 try {
                     await fetchSystemConfigFromFirebase();
@@ -7720,6 +7961,12 @@
             }
             
             setBlankRecordMode('manage_school');
+        }
+
+        function openEditSystemAbout() {
+            closeSchoolConfig();
+            if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
+            setBlankRecordMode('edit_about');
         }
 
         function openDataInformation() {
@@ -8457,6 +8704,10 @@
                 enabled: !!fb_standard_config[id].enabled,
                 options: Array.isArray(meta.options) && meta.options.length ? meta.options.slice() : fb_getStandardSelectOptions(id)
             };
+            if (id === 'photo') {
+                fb_editor_draft.width = meta.width || 600;
+                fb_editor_draft.height = meta.height || 800;
+            }
             const backdrop = document.getElementById('fb_edit_backdrop');
             if (backdrop) backdrop.classList.add('active');
             fb_renderEditor();
@@ -8498,11 +8749,27 @@
                     </div>
                 `
                     : '';
+                const dimensionHtml = (field.id === 'photo')
+                    ? `
+                <div class="flex gap-4 mt-4">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Photo Save Width (px)</label>
+                        <input type="number" value="${field.width || 600}" class="app-input text-slate-700 font-bold" oninput="fb_editorSetDimension('width', this.value)" placeholder="600">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Photo Save Height (px)</label>
+                        <input type="number" value="${field.height || 800}" class="app-input text-slate-700 font-bold" oninput="fb_editorSetDimension('height', this.value)" placeholder="800">
+                    </div>
+                </div>
+                ` : '';
+
                 content.innerHTML = `
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Label</label>
                     <input type="text" value="${String(field.label || '').replace(/"/g, '&quot;')}" class="app-input text-slate-700 font-bold" oninput="fb_editorSetLabel(this.value)" placeholder="Field label">
                 </div>
+                ${optionsHtml}
+                ${dimensionHtml}
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Type</label>
                     ${isFixedTopField
@@ -8591,6 +8858,11 @@
             fb_editor_draft.options[index] = value;
         }
 
+        function fb_editorSetDimension(key, value) {
+            if (!fb_editor_draft) return;
+            fb_editor_draft[key] = parseInt(value, 10) || 0;
+        }
+
         function fb_editorAddOption() {
             if (!fb_editor_draft || fb_editor_draft.type !== 'select') return;
             if (!Array.isArray(fb_editor_draft.options)) fb_editor_draft.options = [];
@@ -8633,6 +8905,10 @@
                     type: cleanType,
                     options: cleanType === 'select' ? cleanOptions : []
                 };
+                if (sid === 'photo') {
+                    fb_standard_meta[sid].width = fb_editor_draft.width || 600;
+                    fb_standard_meta[sid].height = fb_editor_draft.height || 800;
+                }
                 fb_syncToAppData();
                 fb_closeEditor();
                 showToast('Field updated.');
@@ -8855,9 +9131,13 @@
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
 
+                const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
+                const cWidth = pMeta.width || 600;
+                const cHeight = pMeta.height || 800;
+
                 if (cropperInstance) { cropperInstance.destroy(); }
                 cropperInstance = new Cropper(cropImg, {
-                    aspectRatio: 3 / 4,
+                    aspectRatio: cWidth / cHeight,
                     viewMode: 1,
                     autoCropArea: 1,
                 });
@@ -8874,9 +9154,12 @@
 
             function applyCrop() {
                 if (!cropperInstance) return;
+                const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
+                const cWidth = pMeta.width || 600;
+                const cHeight = pMeta.height || 800;
                 const canvas = cropperInstance.getCroppedCanvas({
-                    width: 600,
-                    height: 800,
+                    width: cWidth,
+                    height: cHeight,
                 });
                 if (canvas) {
                     // Use 0.6 quality to ensure base64 image fits comfortably in Firestore 1MB limit
@@ -9001,7 +9284,7 @@
     function ie_renderExportFields() {
         const grid = document.getElementById('ie-export-fields-grid');
         const qrGrid = document.getElementById('ie-export-qr-fields-grid');
-        let html = '';
+        let html = `<label class="flex items-center gap-2 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50"><input type="checkbox" value="_timestamp" class="ie-export-cb accent-blue-600 w-4 h-4" checked><span class="text-xs font-bold text-slate-700 truncate">Timestamp</span></label>`;
         let qrHtml = `<label class="flex items-center gap-2 p-2 bg-white rounded border border-slate-200 cursor-pointer hover:bg-blue-50"><input type="checkbox" value="id" class="ie-qr-cb accent-blue-600 w-3.5 h-3.5" checked><span class="text-[10px] font-bold text-slate-700 truncate">System ID</span></label>`;
         
         fb_form_order.forEach(id => {
@@ -9057,6 +9340,10 @@
                 let row = { 'System ID': rec.id };
                 
                 selectedFields.forEach(id => {
+                    if (id === '_timestamp') {
+                        row['Timestamp'] = rec.createdAt ? new Date(rec.createdAt).toLocaleString('en-IN') : (rec.updatedAt ? new Date(rec.updatedAt).toLocaleString('en-IN') : '');
+                        return;
+                    }
                     let label = id;
                     if (FB_STANDARD_FIELDS.some(sf => sf.id === id)) {
                         label = fb_getStandardLabel(id, FB_STANDARD_FIELDS.find(sf => sf.id === id).label);
@@ -9138,133 +9425,7 @@
         }
     }
     
-    function ie_removeImportFile() {
-        document.getElementById('ie-import-file').value = '';
-        document.getElementById('ie-import-file-details').classList.add('hidden');
-        document.getElementById('ie-import-mapping-container').classList.add('hidden');
-        document.getElementById('ie-btn-import').classList.add('hidden');
-        document.getElementById('ie-import-columns-grid').innerHTML = '';
-        ie_importParsedData = [];
-        ie_importHeaders = [];
-    }
-    
-    function ie_handleFileUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        document.getElementById('ie-import-filename').textContent = file.name;
-        document.getElementById('ie-import-filesize').textContent = (file.size / 1024).toFixed(1) + ' KB';
-        document.getElementById('ie-import-file-details').classList.remove('hidden');
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            ie_importParsedData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
-            
-            document.getElementById('ie-import-rowcount').textContent = ie_importParsedData.length + ' Rows';
-            
-            if (ie_importParsedData.length > 0) {
-                ie_importHeaders = Object.keys(ie_importParsedData[0]);
-                let html = '';
-                ie_importHeaders.forEach(h => {
-                    html += `<label class="flex items-center gap-2 p-3 bg-white rounded-xl border border-emerald-200 cursor-pointer hover:bg-emerald-50"><input type="checkbox" value="${h}" class="ie-import-cb accent-emerald-600 w-4 h-4" checked><span class="text-xs font-bold text-slate-700 truncate">${h}</span></label>`;
-                });
-                document.getElementById('ie-import-columns-grid').innerHTML = html;
-                document.getElementById('ie-import-mapping-container').classList.remove('hidden');
-                document.getElementById('ie-btn-import').classList.remove('hidden');
-            } else {
-                showToast("The selected Excel file is empty.", true);
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-    
-    async function ie_runImport() {
-        const btn = document.getElementById('ie-btn-import');
-        const origHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
-        btn.disabled = true;
-        
-        try {
-            const selectedCols = Array.from(document.querySelectorAll('.ie-import-cb:checked')).map(cb => cb.value);
-            if (selectedCols.length === 0) throw new Error("No columns selected for import.");
-            
-            const mapping = {};
-            selectedCols.forEach(col => {
-                const colLower = col.toLowerCase().trim();
-                let matchedId = null;
-                
-                FB_STANDARD_FIELDS.forEach(sf => {
-                    if (sf.label.toLowerCase() === colLower || sf.id.toLowerCase() === colLower) matchedId = sf.id;
-                });
-                
-                if (!matchedId) {
-                    fb_fields.forEach(cf => {
-                        if (cf.label.toLowerCase() === colLower || cf.id.toLowerCase() === colLower) matchedId = cf.id;
-                    });
-                }
-                
-                mapping[col] = matchedId || col.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-            });
-            
-            let importCount = 0;
-            const schoolId = (schoolConfig && schoolConfig.loginId) ? schoolConfig.loginId : (currentUser ? currentUser.userId : 'anonymous');
-            
-            for (let i = 0; i < ie_importParsedData.length; i++) {
-                const row = ie_importParsedData[i];
-                const record = {
-                    createdAt: Date.now(),
-                    schoolId: schoolId,
-                    deviceId: localStorage.getItem('device_id') || 'web-import',
-                    syncStatus: 'synced'
-                };
-                
-                let hasPhoto = false;
-                
-                selectedCols.forEach(col => {
-                    const val = row[col];
-                    const sysId = mapping[col];
-                    record[sysId] = val;
-                                 if (sysId === 'photoData' || sysId === 'docUrl' || col.toLowerCase() === 'photo' || col.toLowerCase() === 'image') {
-                        if (val && val.length > 5) {
-                            record.docUrl = val;
-                            hasPhoto = true;
-                        }
-                    }
-                });
-                
-                if (hasPhoto) {
-                    record.status = 'unverified';
-                    record.verified = false; 
-                    record.returned = false;
-                } else {
-                    record.status = 'pending';
-                    record.verified = false;
-                    record.returned = false;
-                }
-                
-                record.id = 'draft_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + i;
-                db.unshift(record);
-                serverCallSilent('addRecord', [record], ()=>{}, ()=>{});
-                importCount++;
-            }
-            
-            filterRecords();
-            renderHomeAnalysis();
-            closeImportExportModal();
-            showModal('success', 'Import Successful', `Successfully imported ${importCount} records into the pending list.`);
-        } catch(err) {
-            console.error(err);
-            showToast("Import failed: " + err.message, true);
-        } finally {
-            btn.innerHTML = origHTML;
-            btn.disabled = false;
-        }
-    }
+
     </script>
 
     <!-- Swipe to Back Functionality -->

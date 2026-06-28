@@ -1,472 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="icon" type="image/png" href="./fevicon.png">
-    <link rel="apple-touch-icon" href="./idapplogo.png">
-    <title id="page-title">IDentify</title>
-    <!-- External Libraries -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
-    <link rel="stylesheet" href="global.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, limit, setDoc, onSnapshot, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
-
-        const _k = "QUl6YVN5Qk1aM0xVTlNRdWJLamFudjRNTnlETnN2S3dQbXNLUVk4";
-        const _d = "aWQzZmlsZXMuZmlyZWJhc2VhcHAuY29t";
-        const _p = "aWQzZmlsZXM=";
-        const _s = "aWQzZmlsZXMuZmlyZWJhc2VzdG9yYWdlLmFwcA==";
-        const _m = "ODM5OTYxNjMxOTc4";
-        const _a = "MTo4Mzk5NjE2MzE5Nzg6d2ViOjQzMDBjYmUxZmNiMTQ2MTg3OGNiOTM=";
-
-        const firebaseConfig = {
-            apiKey: atob(_k),
-            authDomain: atob(_d),
-            projectId: atob(_p),
-            storageBucket: atob(_s),
-            messagingSenderId: atob(_m),
-            appId: atob(_a)
-        };
-        try {
-            const app = initializeApp(firebaseConfig);
-            window.db = getFirestore(app);
-            window.auth = getAuth(app);
-            window.storage = getStorage(app);
-
-            window.firebaseAPI = {
-                initializeApp, getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signInAnonymously, onAuthStateChanged,
-                db: window.db, auth: window.auth, storage: window.storage, firebaseConfig,
-                collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, limit, setDoc, onSnapshot, getDoc, runTransaction,
-                signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, createUserWithEmailAndPassword,
-                getStorage, ref, uploadString, getDownloadURL,
-                firebaseConfig
-            };
-            console.log("Firebase initialized successfully.");
-        } catch (e) {
-            console.error("Firebase initialization error:", e);
-        }
-    </script>
-
-                            <link rel="manifest" href="manifest.json">
-</head>
-
-<body class="flex flex-col h-screen">
-
-    <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="flex flex-col items-center justify-center drop-shadow-2xl -mt-32">
-            <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
-        </div>
-        <!-- 3 Loading Dots -->
-        <div class="absolute bottom-16 flex space-x-3 justify-center items-center">
-            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-            <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce"></div>
-        </div>
-    </div>
-
-    <div id="login-overlay" class="fixed inset-0 z-[11000] hidden items-center justify-center bg-[#f0f4f8] p-4 overflow-y-auto">
-        <div
-            class="relative w-full max-w-[340px] rounded-[28px] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.13)] overflow-hidden border border-slate-100 mt-2">
-            
-            <!-- Punch Hole Cutout (Lanyard Slot) -->
-            <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-12 h-3 bg-[#f0f4f8] rounded-full shadow-[inset_0_2px_5px_rgba(0,0,0,0.08)] flex items-center justify-center z-20 border border-slate-100/50">
-                <div class="w-8 h-1 bg-slate-200/80 rounded-full"></div>
-            </div>
-
-            <div class="px-6 pt-9 pb-7">
-
-                <!-- Icon Badge -->
-                <div class="flex flex-col items-center mb-5">
-                    <div
-                        class="w-[70px] h-[70px] rounded-full border-[3px] border-emerald-500 flex items-center justify-center bg-white shadow-sm mb-3">
-                        <div id="login-logo-container" class="w-[52px] h-[52px] rounded-full bg-emerald-50 flex items-center justify-center overflow-hidden">
-                            <i data-lucide="id-card" class="w-7 h-7 text-emerald-600"></i>
-                        </div>
-                    </div>
-                    <h2 id="login-school-name"
-                        class="text-[17px] font-extrabold text-slate-800 text-center leading-snug">Delhi Public School
-                    </h2>
-                    <p class="mt-1 text-[12px] font-semibold text-emerald-700">ID Card Management Software</p>
-                </div>
-
-                <!-- Fields -->
-                <div class="mt-2">
-                    <!-- Normal Login Fields -->
-                    <div id="login-normal-fields" class="space-y-4">
-                        <div>
-                            <label for="login-user-id"
-                                class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                                <i data-lucide="mail" class="w-3.5 h-3.5 text-emerald-500"></i> School Email
-                            </label>
-                            <input id="login-user-id" type="email"
-                                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"
-                                placeholder="Enter School Email">
-                        </div>
-                        <div>
-                            <label
-                                class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                                <i data-lucide="lock-keyhole" class="w-3.5 h-3.5 text-emerald-500"></i> Password
-                            </label>
-                            <div class="relative">
-                                <input id="login-password" type="password"
-                                    class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 pr-12 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"
-                                    placeholder="Enter password">
-                                <button id="login-password-toggle" type="button" onclick="toggleLoginPassword()"
-                                    class="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-slate-400 hover:text-emerald-600 transition"
-                                    aria-label="Show password">
-                                    <i id="login-password-toggle-icon" data-lucide="eye" class="w-5 h-5"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div id="login-error"
-                            class="hidden rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-500">
-                        </div>
-                        <button id="login-submit-btn" type="button" onclick="submitLogin()"
-                            class="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-4 py-4 text-[15px] font-extrabold text-white shadow-sm flex items-center justify-center gap-2 transition mt-1">
-                            <i data-lucide="log-in" class="w-5 h-5"></i> Login
-                        </button>
-                        
-                        <div id="forgot-password-container" class="mt-4 text-center hidden">
-                            <button type="button" onclick="showForgotFields(true)" class="text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition">
-                                Forgot Password?
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Forgot Password Fields -->
-                    <div id="login-forgot-fields" class="space-y-4 hidden animate-in fade-in duration-200">
-                        <div id="forgot-inputs-wrapper" class="space-y-4">
-                            <div>
-                                <label
-                                    class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                                    <i data-lucide="mail" class="w-3.5 h-3.5 text-emerald-500"></i> Admin Email
-                                </label>
-                                <input id="login-forgot-email" type="email"
-                                    class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition"
-                                    placeholder="Enter Admin Email">
-                            </div>
-                            <button id="forgot-submit-btn" type="button" onclick="submitForgotPassword()"
-                                class="w-full rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 px-4 py-4 text-[15px] font-extrabold text-white shadow-sm flex items-center justify-center gap-2 transition mt-1">
-                                Next <i class="fa-solid fa-arrow-right text-sm"></i>
-                            </button>
-                            
-                            <div class="mt-4 text-center">
-                                <button type="button" onclick="showForgotFields(false)" class="text-sm font-semibold text-slate-500 hover:text-slate-700 transition">
-                                    Back to Login
-                                </button>
-                            </div>
-                        </div>
-                        <div id="forgot-error"
-                            class="hidden rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-500">
-                        </div>
-                        <div id="forgot-success"
-                            class="hidden rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                        </div>
-                        <div id="forgot-timer-msg" class="hidden text-xs font-bold text-slate-500 text-center mt-2">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Footer -->
-                <div class="mt-5 relative w-full pb-2 flex flex-col items-center justify-center">
-                    <div class="flex items-center gap-1.5">
-                        <i class="fa-solid fa-id-card text-emerald-600 text-[13px]"></i>
-                        <span class="text-[12px] font-black tracking-widest text-emerald-600">IDentify</span>
-                    </div>
-                    <div class="text-[10px] font-bold tracking-widest text-emerald-500 uppercase mt-0.5">By: Javed Ansari</div>
-                    
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="app-container" class="flex flex-col flex-1 overflow-hidden h-full relative">
-        <!-- Premium Mesh Background & Graphics -->
-        <div class="absolute inset-0 pointer-events-none z-0" style="background-image: radial-gradient(rgba(5, 153, 108, 0.06) 1.2px, transparent 1.2px); background-size: 16px 16px; opacity: 0.85;"></div>
-        
-        <!-- Colorful Mesh Spheres -->
-        <div class="absolute top-[-50px] left-[-50px] w-48 h-48 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none z-0"></div>
-        <div class="absolute bottom-[100px] right-[-50px] w-64 h-64 rounded-full bg-blue-300/10 blur-3xl pointer-events-none z-0"></div>
-        
-        <!-- Circular Radar-Style Wireframe Graphic -->
-        <svg class="absolute top-[-30px] right-[-40px] w-48 h-48 opacity-10 text-emerald-700 pointer-events-none z-0" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.3">
-            <circle cx="50" cy="50" r="10" />
-            <circle cx="50" cy="50" r="20" />
-            <circle cx="50" cy="50" r="30" />
-            <circle cx="50" cy="50" r="40" />
-            <circle cx="50" cy="50" r="50" />
-            <circle cx="50" cy="50" r="60" />
-            <line x1="0" y1="50" x2="100" y2="50" />
-            <line x1="50" y1="0" x2="50" y2="100" />
-        </svg>
-
-        <!-- Abstract Wave Grid Graphic -->
-        <svg class="absolute bottom-[140px] left-[-40px] w-56 h-32 opacity-[0.08] text-blue-600 pointer-events-none z-0" viewBox="0 0 100 50" fill="none" stroke="currentColor" stroke-width="0.3">
-            <path d="M0,25 C20,10 40,40 60,25 C80,10 100,25 100,25" />
-            <path d="M0,30 C20,15 40,45 60,30 C80,15 100,30 100,30" />
-            <path d="M0,20 C20,5 40,35 60,20 C80,5 100,20 100,20" />
-            <path d="M0,35 C20,20 40,50 60,35 C80,20 100,35 100,35" />
-        </svg>
-
-        <!-- Elegant Sparkles & Floating Nodes -->
-        <div class="absolute top-[80px] left-[30px] opacity-15 text-emerald-600 animate-pulse pointer-events-none z-0"><i class="fa-solid fa-sparkles text-base"></i></div>
-        <div class="absolute top-[180px] right-[40px] opacity-15 text-blue-500 animate-pulse pointer-events-none z-0" style="animation-delay: 1s;"><i class="fa-solid fa-star text-[10px]"></i></div>
-        <div class="absolute bottom-[280px] left-[20px] opacity-10 text-emerald-500 animate-pulse pointer-events-none z-0" style="animation-delay: 2s;"><i class="fa-solid fa-circle-nodes text-xs"></i></div>
-
-
-
-        <div id="records" class="tab-section">
-            <main class="flex flex-col h-full overflow-hidden bg-transparent relative">
-                <header class="home-header px-3 pt-2 pb-1 z-[1000] border-b border-gray-100">
-                    <div id="records-header-standard-db"
-                        class="h-12 rounded-full flex items-center pl-2 pr-2 gap-2 bg-white"
-                        style="box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);">
-                        <button id="profile-btn"
-                            class="w-9 h-9 rounded-full bg-white text-emerald-700 flex items-center justify-center font-bold text-xs active:scale-95 transition-transform overflow-hidden p-0 border-2 border-emerald-600"
-                            onclick="openSchoolConfig()">
-                            <i class="fa-solid fa-school"></i>
-                        </button>
-                        <div id="search-input-container" class="flex-1 min-w-0 relative flex items-center">
-                            <i id="search-icon" class="fa-solid fa-magnifying-glass text-slate-400 ml-2"></i>
-                            <input type="text" id="mainSearch" placeholder="Search students..."
-                                class="bg-transparent border-none outline-none w-full text-sm font-medium ml-2 text-slate-700 placeholder-slate-400 transition-all"
-                                oninput="onSearchInput()">
-                            <h2 id="records-page-info-db"
-                                class="absolute inset-y-0 left-0 right-10 flex items-center text-[16px] font-extrabold text-[#059669] tracking-tight truncate leading-none pt-[1px] bg-white pointer-events-none hidden pl-2">
-                            </h2>
-                        </div>
-                        <div id="bulk-actions-container"
-                            class="hidden items-center gap-1.5 ml-auto pr-1 animate-in fade-in zoom-in duration-200">
-                                <button id="btn-bulk-restore" onclick="bulkBinRestore()"
-                                class="hidden w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
-                                title="Restore Selected">
-                                <i class="fa-solid fa-rotate-left text-sm"></i>
-                            </button>
-                            <button id="btn-bulk-delete" onclick="bulkDeleteSelected()"
-                                class="w-9 h-9 rounded-full bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
-                                title="Delete Selected">
-                                <i class="fa-solid fa-trash-can text-sm"></i>
-                            </button>
-                            <button id="btn-bulk-verify" onclick="bulkVerifySelected()"
-                                class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
-                                title="Verify Selected">
-                                <span class="material-symbols-outlined text-[20px]"
-                                    style="font-variation-settings: 'FILL' 1;">verified</span>
-                            </button>
-                        </div>
-                        <button id="btn-bulk-select-toggle" onclick="handleBulkToggleSelectAll()"
-                            class="hidden h-9 rounded-full bg-violet-900 text-white border border-violet-800 flex items-center justify-center px-3 gap-1 active:scale-95 transition-transform shadow-sm hover:bg-violet-800"
-                            title="Select All / Deselect All">
-                            <span id="bulk-select-count" class="text-sm font-black text-white">0</span>
-                            <i id="bulk-select-icon" class="fa-solid fa-square text-sm text-white"></i>
-                        </button>
-                        <!-- Selection Toggle Button (Replaces Plus when items selected or in Unverified view) -->
-                        <button id="toggle-form-btn" onclick="toggleStudentForm()"
-                            class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all relative">
-                            <i id="toggle-icon" class="fa-solid fa-plus text-sm"></i>
-                        </button>
-                    </div>
-
-                    <div class="mt-1 flex items-center gap-1 overflow-x-auto custom-scroll pb-1 filter-chips-container"
-                        id="class-filter-row">
-                        <!-- Class Selection Dropdown -->
-                        <div class="relative shrink-0">
-                            <button id="filterClassBtn" class="school-filter-btn flex items-center gap-2"
-                                onclick="toggleFilterMenu('class', this)">
-                                <span id="filterClassText" class="filter-class-text-container">All Class</span>
-                            </button>
-                        </div>
-
-
-
-                        <button id="btn-all-data" class="school-filter-btn active shrink-0" style="display: none;"
-                            onclick="setChipFilter('status', 'all')">All Data</button>
-                        <button id="btn-verified" class="school-filter-btn shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'verified')" title="Verified"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">verified</span></button>
-                        <button id="btn-unverified"
-                            class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'unverified')" title="Unverified"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">unpublished</span></button>
-                        <button id="btn-pending" class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'pending')" title="Pending (No Photo)"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">no_photography</span></button>
-                        <button id="btn-recycle-bin" class="school-filter-btn pending-chip shrink-0 flex items-center gap-1" style="display: none;"
-                            onclick="setChipFilter('status', 'recycleBin')" title="Recycle Bin"><span
-                                class="material-symbols-outlined text-[18px]"
-                                style="font-variation-settings: 'FILL' 1;">delete</span></button>
-
-                        <!-- Sort Button -->
-                        <div class="relative shrink-0 flex items-center ml-auto pl-1 pr-[2px]">
-                            <button id="filterSortBtn"
-                                class="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 active:scale-95 transition-all"
-                                onclick="handleSortToggle(event)" title="Sort Data">
-                                <i class="fa-solid fa-clock-rotate-left text-[16px] text-slate-500"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                </header>
-
-                <!-- Records List View -->
-                <div id="records-list-view" class="pt-1 flex-1 flex flex-col min-h-0 overflow-hidden">
-                    <div class="flex-1 overflow-y-auto custom-scroll system-scroll px-4 pt-1 pb-6" ontouchstart="handleHomeTouchStart(event)" ontouchend="handleHomeTouchEnd(event)">
-                        <div id="records-list-container" class="system-card rounded-3xl overflow-hidden">
-                            <!-- Premium Skeleton Loading Animation -->
-                            <div id="skeleton-loader" class="divide-y divide-gray-50 bg-white">
-                                <!-- Skeleton Item 1 -->
-                                <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] animate-pulse">
-                                    <div class="w-16 bg-slate-100/70 flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden"></div>
-                                    <div class="flex-1 px-4 flex flex-col justify-center gap-2 min-w-0">
-                                        <div class="h-3.5 bg-slate-100 rounded-md w-[45%]"></div>
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-[60%]"></div>
-                                    </div>
-                                    <div class="px-4 flex flex-col items-end justify-center gap-2 min-w-[80px]">
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-8"></div>
-                                        <div class="h-2 bg-slate-100 rounded-md w-12"></div>
-                                    </div>
-                                </div>
-                                <!-- Skeleton Item 2 -->
-                                <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] animate-pulse">
-                                    <div class="w-16 bg-slate-100/70 flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden"></div>
-                                    <div class="flex-1 px-4 flex flex-col justify-center gap-2 min-w-0">
-                                        <div class="h-3.5 bg-slate-100 rounded-md w-[35%]"></div>
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-[50%]"></div>
-                                    </div>
-                                    <div class="px-4 flex flex-col items-end justify-center gap-2 min-w-[80px]">
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-8"></div>
-                                        <div class="h-2 bg-slate-100 rounded-md w-12"></div>
-                                    </div>
-                                </div>
-                                <!-- Skeleton Item 3 -->
-                                <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] animate-pulse">
-                                    <div class="w-16 bg-slate-100/70 flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden"></div>
-                                    <div class="flex-1 px-4 flex flex-col justify-center gap-2 min-w-0">
-                                        <div class="h-3.5 bg-slate-100 rounded-md w-[55%]"></div>
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-[40%]"></div>
-                                    </div>
-                                    <div class="px-4 flex flex-col items-end justify-center gap-2 min-w-[80px]">
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-8"></div>
-                                        <div class="h-2 bg-slate-100 rounded-md w-12"></div>
-                                    </div>
-                                </div>
-                                <!-- Skeleton Item 4 -->
-                                <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] animate-pulse">
-                                    <div class="w-16 bg-slate-100/70 flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden"></div>
-                                    <div class="flex-1 px-4 flex flex-col justify-center gap-2 min-w-0">
-                                        <div class="h-3.5 bg-slate-100 rounded-md w-[40%]"></div>
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-[60%]"></div>
-                                    </div>
-                                    <div class="px-4 flex flex-col items-end justify-center gap-2 min-w-[80px]">
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-8"></div>
-                                        <div class="h-2 bg-slate-100 rounded-md w-12"></div>
-                                    </div>
-                                </div>
-                                <!-- Skeleton Item 5 -->
-                                <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] animate-pulse">
-                                    <div class="w-16 bg-slate-100/70 flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden"></div>
-                                    <div class="flex-1 px-4 flex flex-col justify-center gap-2 min-w-0">
-                                        <div class="h-3.5 bg-slate-100 rounded-md w-[50%]"></div>
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-[45%]"></div>
-                                    </div>
-                                    <div class="px-4 flex flex-col items-end justify-center gap-2 min-w-[80px]">
-                                        <div class="h-2.5 bg-slate-100 rounded-md w-8"></div>
-                                        <div class="h-2 bg-slate-100 rounded-md w-12"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="inline-student-form" class="hidden" aria-hidden="true">
-                    <input type="hidden" id="edit-id">
-                    <input type="text" id="in-studentName" value="">
-                    <input type="text" id="in-fatherName" value="">
-                    <input type="text" id="in-dob" value="">
-                    <input type="text" id="in-mobile" value="">
-                    <input type="text" id="in-aadhar" value="">
-                    <input type="text" id="in-address" value="">
-                    <select id="in-sclass">
-                        <option value="General">General</option>
-                    </select>
-                    <input type="text" id="in-section" value="" placeholder="Section (Opt)">
-                    <select id="in-gender">
-                        <option value="Other">Other</option>
-                    </select>
-                    <input type="text" id="in-customField1" value="">
-                    <input type="text" id="in-customField2" value="">
-                    <input type="text" id="in-customField3" value="">
-                    <input type="text" id="in-customField4" value="">
-                    <input type="text" id="in-customField5" value="">
-                    <input type="file" id="photo-upload" accept="image/*">
-                    <input type="file" id="photo-capture" accept="image/*" capture="environment">
-                    <button type="button" id="remove-photo-btn" class="hidden"></button>
-                    <div id="photo-upload-label"></div>
-                    <div id="upload-btn-text"></div>
-                    <img id="photo-preview-img" src="" alt="">
-                    <div id="photo-placeholder"></div>
-                    <div id="photo-placeholder-icon"></div>
-                </div>
-
-                <!-- Footer: Precision Mirroring -->
-                <footer class="home-footer px-4 shrink-0">
-                    <div id="footer-pagination" class="w-full flex items-center justify-between gap-2">
-                        <div class="flex items-center shrink-0 gap-1.5">
-                            <i class="fa-solid fa-id-card text-emerald-600 text-[12px]"></i>
-                            <span class="text-[11px] font-black tracking-widest text-emerald-600">IDentify</span>
-                        </div>
-
-                        <div id="footer-pagination-controls" class="flex items-center gap-3">
-                            <button onclick="scrollTableRows(-1)"
-                                class="w-8 h-8 flex items-center justify-center text-emerald-700 active:scale-90 transition">
-                                <i class="fa-solid fa-chevron-left"></i>
-                            </button>
-                            <span id="footer-page-info"
-                                class="text-[11px] font-bold text-emerald-600 uppercase tracking-tighter">Page 1 of
-                                1</span>
-                            <button onclick="scrollTableRows(1)"
-                                class="w-8 h-8 flex items-center justify-center text-emerald-700 active:scale-90 transition">
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                        </div>
-
-                        <div id="footer-count-wrapper"
-                            class="text-[11px] font-bold text-emerald-600 min-w-[30px] text-right">
-                            <span id="showing-count">0/0</span>
-                        </div>
-
-                        <div id="footer-notification-wrapper" class="flex-1 text-right pr-1 hidden">
-                        </div>
-                    </div>
-                </footer>
-            </main>
-        </div>
-
-        <script>
             function sanitizeHTML(str) {
                 if (str == null) return '';
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -523,29 +55,6 @@
                 return list;
             }
             let menuAutoHideTimer = null;
-            let recycleBinTimer = null;
-
-            function activateRecycleBinFilter() {
-                closeAllMenus();
-                if (typeof setBlankRecordMode === 'function') setBlankRecordMode('none');
-                const binBtn = document.getElementById('btn-recycle-bin');
-                if (binBtn) {
-                    binBtn.style.display = 'flex';
-                    showToast('Recycle Bin unlocked for 1 minute');
-                    
-                    showTab('records');
-                    setChipFilter('status', 'recycleBin');
-                    
-                    if (recycleBinTimer) clearTimeout(recycleBinTimer);
-                    
-                    recycleBinTimer = setTimeout(() => {
-                        binBtn.style.display = 'none';
-                        if (activeStatusFilter === 'recycleBin') {
-                            setChipFilter('status', 'all');
-                        }
-                    }, 60000);
-                }
-            }
             let currentUser = null;
             const APP_VERSION = 'JVD 1.04.26';
             const MENU_AUTO_HIDE_MS = 4000;
@@ -636,17 +145,6 @@
                 }
             };
 
-            async function persistLocalUnverified() {
-                try {
-                    const unverifiedList = (typeof db !== 'undefined' ? db : []).filter(x => {
-                        const isReturned = (x.isDeleted || String(x.verified).toLowerCase() === 'returned' || String(x.status).toLowerCase() === 'returned' || x.returned === true || String(x.returned).toLowerCase() === 'true');
-                        const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
-                        return !isRecVerified;
-                    });
-                    await SchoolLocalDB.set('local_unverified', unverifiedList);
-                } catch(e) { console.warn("Failed to persist local unverified records", e); }
-            }
-
             window.addEventListener('online', async () => {
                 const queue = await SchoolLocalDB.getAllSyncQueue();
                 if (queue.length > 0) {
@@ -678,7 +176,7 @@
             let previewRecord = null;
             let isPreviewFromSave = false;
             const AUTO_LOGOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
-            let activeStatusFilter = 'all';
+            let activeStatusFilter = 'verified';
             let activeClassFilter = 'all';
 
             // Form Builder State
@@ -715,18 +213,6 @@
                 }
             }
             function serverCallSilent(fn, args, onSuccess, onFailure) {
-                // Block unverified records from being pushed to the server or queued
-                if (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord') {
-                    const rec = args[0];
-                    if (rec) {
-                        const isVerified = rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Identify' || rec.verified === 'Completed';
-                        if (!isVerified) {
-                            if (onSuccess) onSuccess(rec);
-                            return; // Do NOT hit server and do NOT queue
-                        }
-                    }
-                }
-
                 if (!navigator.onLine && (fn === 'updateRecord' || fn === 'submitStudentData' || fn === 'addRecord' || fn === 'deleteRecord')) {
                     const rec = args[0];
                     if (rec && rec.id) {
@@ -748,7 +234,7 @@
                 });
             }
             async function handleFirebaseCall(fn, args, onSuccess, onFailure) {
-                const { collection, addDoc, getDocs, getDoc, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
+                const { collection, addDoc, getDocs, updateDoc, setDoc, deleteDoc, doc, query, orderBy, onSnapshot } = window.firebaseAPI;
                 try {
                     if (fn === 'getRecords') {
                         if (window._recordsUnsubscribe) {
@@ -1085,78 +571,6 @@
                 highlightRecord(id);
             }
 
-            function triggerDirectPreviewUpload(capture) {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                if (capture) input.capture = 'environment';
-                
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    setUploadFieldProgress('Compressing...', 10, true);
-                    compressImage(file, (compFile, dataUrl) => {
-                        photoData = dataUrl;
-                        showPhotoPreview(photoData);
-                        
-                        if (previewRecord) {
-                            previewRecord._isEditingMode = true;
-                            previewRecord.photo = dataUrl;
-                            previewRecord._displayPhotoSrc = dataUrl;
-                            storeRecordInDb(previewRecord);
-                            queueServerDraftSync();
-                            
-                            showToast('Photo Uploaded Successfully!');
-                            renderCurrentRecordsPage();
-                        }
-                    });
-                };
-                input.click();
-            }
-
-            function setupPhotoUpload() {
-                const uploadInput = document.getElementById('photo-upload');
-                const captureInput = document.getElementById('photo-capture');
-                const removeBtn = document.getElementById('remove-photo-btn');
-                if (removeBtn) {
-                   const hasPhoto = !!(photoData || pendingUploadedDocument);
-                   if (!hasPhoto) removeBtn.classList.add('hidden');
-                }
-                if (uploadInput) {
-                    uploadInput.addEventListener('change', (e) => {
-                        handlePhotoFile(e.target.files[0]);
-                        e.target.value = '';
-                    });
-                }
-                if (captureInput) {
-                    captureInput.addEventListener('change', (e) => {
-                        handlePhotoFile(e.target.files[0]);
-                        e.target.value = '';
-                    });
-                }
-            }
-            function removePhoto(e) {
-                if(e) e.stopPropagation();
-                photoData = null;
-                clearPhotoPreview();
-                resetUploadFieldLabel('Upload Student');
-                clearPendingUploadedDocument(true);
-                
-                if (blankRecordMode === 'preview' || blankRecordMode === 'student') {
-                    if (previewRecord) {
-                        previewRecord.photo = '';
-                        previewRecord._displayPhotoSrc = '';
-                        previewRecord._isEditingMode = false;
-                        storeRecordInDb(previewRecord);
-                        queueServerDraftSync();
-                        
-                        if (blankRecordMode === 'preview') {
-                            renderCurrentRecordsPage();
-                        }
-                    }
-                }
-            }
-
             async function submitLogin() {
                 const userId = (document.getElementById('login-user-id').value || '').trim();
                 const password = (document.getElementById('login-password').value || '').trim();
@@ -1197,19 +611,12 @@
                     const user = userCredential.user;
                     
                     if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
-                        throw new Error("This is an Admin email. Please use the Admin Panel.");
+                        authUser = { userId: 'admin', name: 'Admin', role: 'teacher', viewMode: 'all', email: user.email };
                     } else {
-                        // All other emails are treated as School role in School Panel
-                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School User'), role: 'school', email: user.email };
+                        throw new Error("This email does not have Admin access.");
                     }
                     
                     saveAuthUser(authUser);
-                    
-                    // Fire-and-forget activity log
-                    if (authUser && authUser.email) {
-                        logSchoolActivity(authUser.email);
-                    }
-
                     resetAutoLogoutTimer();
                     showLoginOverlay(false);
                     showTab('records');
@@ -1407,14 +814,6 @@
                 const mobile = document.getElementById('manage-school-mobile')?.value || '';
                 const email = document.getElementById('manage-school-email')?.value || '';
                 const contactPerson = document.getElementById('manage-school-contact')?.value || '';
-                const systemAbout = document.getElementById('manage-system-about')?.value || '';
-                const whatsapp = document.getElementById('manage-school-whatsapp')?.value || '';
-                const instagram = document.getElementById('manage-school-instagram')?.value || '';
-                const youtube = document.getElementById('manage-school-youtube')?.value || '';
-                const facebook = document.getElementById('manage-school-facebook')?.value || '';
-                
-                const schoolId = (document.getElementById('new-school-id').value || '').trim();
-                const password = (document.getElementById('new-school-pass').value || '').trim();
                 
                 const msgEl = document.getElementById('school-create-msg');
                 const btn = document.getElementById('btn-save-manage-school');
@@ -1431,22 +830,8 @@
                     address: address,
                     mobile: mobile,
                     email: email,
-                    contactPerson: contactPerson,
-                    systemAbout: systemAbout,
-                    whatsapp: whatsapp,
-                    instagram: instagram,
-                    youtube: youtube,
-                    facebook: facebook,
-                    loginId: schoolId
+                    contactPerson: contactPerson
                 };
-                delete newConfig.loginPassword; // Ensure plain text password is removed securely
-                delete newConfig.loginHash; // Remove old one-way hash if exists
-                
-                if (password) {
-                    newConfig.loginEnc = encryptLocal(password);
-                } else if (schoolConfig.loginEnc) {
-                    newConfig.loginEnc = schoolConfig.loginEnc;
-                }
                 
                 if (tempManageSchoolLogo) {
                     newConfig.logo = tempManageSchoolLogo;
@@ -1456,35 +841,20 @@
                 saveSchoolConfig(newConfig);
                 updateBulkHeader();
 
-                if (schoolId || password) {
-                    if (!schoolId || !password) {
-                        showStatusCard('Notice', 'School Info Saved! But to create login, enter both User ID and Password.', { tone: 'warning', progress: 100, dismissible: true, autoHideMs: 4000 });
-                        return;
-                    }
-                    if (password.length < 6) {
-                        showStatusCard('Notice', 'School Info Saved! But password must be at least 6 characters.', { tone: 'warning', progress: 100, dismissible: true, autoHideMs: 4000 });
-                        return;
-                    }
-
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-                    }
-
-                    setTimeout(() => {
-                        tempManageSchoolLogo = null;
-                        showStatusCard('Success', 'School Details & Local Login Updated Successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details & Access';
-                        }
-                        openSchoolConfig(); // Goes to Settings overlay
-                    }, 500);
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
                 }
 
-                tempManageSchoolLogo = null;
-                showStatusCard('Success', 'School details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
-                openSchoolConfig(); // Redirect to Settings popup
+                setTimeout(() => {
+                    tempManageSchoolLogo = null;
+                    showStatusCard('Success', 'School details saved successfully!', { tone: 'success', progress: 100, dismissible: true, autoHideMs: 3000 });
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Details & Access';
+                    }
+                    setBlankRecordMode('settings');
+                }, 500);
             }
 
             async function submitGoogleLogin() {
@@ -1504,12 +874,6 @@
                     
                     const authUser = { userId: user.email, name: user.displayName, photo: user.photoURL, role: 'school' };
                     saveAuthUser(authUser);
-                    
-                    // Fire-and-forget activity log
-                    if (authUser && authUser.userId) {
-                        logSchoolActivity(authUser.userId);
-                    }
-
                     resetAutoLogoutTimer();
                     showLoginOverlay(false);
                     showTab('records');
@@ -1542,119 +906,6 @@
                     lucide.createIcons();
                 }
             }
-            function focusPassword() {
-                const pwdEl = document.getElementById('login-password');
-                if (pwdEl) pwdEl.focus();
-            }
-
-            async function logSchoolActivity(userEmail) {
-                try {
-                    let locationStr = 'Unknown Location';
-                    try {
-                        const controller = new AbortController();
-                        const id = setTimeout(() => controller.abort(), 2000);
-                        const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
-                        clearTimeout(id);
-                        if (res.ok) {
-                            const data = await res.json();
-                            locationStr = `${data.city || ''}, ${data.region || ''}, ${data.country_name || ''}`.replace(/^, | ,|, $/g, '').trim();
-                        }
-                    } catch(e) {}
-                    
-                    const isMobile = navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad');
-                    
-                    const payload = {
-                        email: userEmail || 'Unknown',
-                        timestamp: Date.now(),
-                        deviceInfo: isMobile ? 'Mobile' : 'Desktop',
-                        userAgent: navigator.userAgent,
-                        location: locationStr || 'Unknown Location'
-                    };
-                    
-                    if (window.firebaseAPI && window.db) {
-                        const { collection, addDoc } = window.firebaseAPI;
-                        await addDoc(collection(window.db, 'activityLogs'), payload);
-                    }
-                } catch(err) {
-                    console.warn("Failed to log school activity", err);
-                }
-            }
-
-            async function loginWithEmail() {
-                const errorEl = document.getElementById('login-error');
-                const btn = document.getElementById('login-btn');
-                const userIdInput = document.getElementById('login-user-id');
-                const passwordInput = document.getElementById('login-password');
-                const userId = userIdInput ? userIdInput.value : '';
-                const password = passwordInput ? passwordInput.value : '';
-                
-                if (errorEl) errorEl.classList.add('hidden');
-                
-                if (!userId || !password) {
-                    if (errorEl) {
-                        errorEl.innerText = 'Please enter both Email and Password';
-                        errorEl.classList.remove('hidden');
-                    }
-                    return;
-                }
-                
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin w-5 h-5 flex items-center justify-center"></i> <span>Logging in...</span>';
-                }
-                
-                try {
-                    if (!window.schoolConfig) {
-                        try {
-                            await fetchSystemConfigFromFirebase();
-                        } catch (e) {
-                            console.warn("Could not fetch school config from Firebase on login:", e);
-                        }
-                    }
-
-                    let authUser = null;
-                    
-                    const userCredential = await window.firebaseAPI.signInWithEmailAndPassword(window.auth, userId, password);
-                    const user = userCredential.user;
-                    
-                    if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'identify.jvd@gmail.com')) {
-                        throw new Error("This is an Admin email. Please use the Admin Panel.");
-                    } else {
-                        authUser = { userId: user.uid, name: (user.email ? user.email.split('@')[0] : 'School User'), role: 'school', email: user.email };
-                    }
-                    
-                    saveAuthUser(authUser);
-                    
-                    if (authUser && authUser.email) {
-                        logSchoolActivity(authUser.email);
-                    }
-
-                    resetAutoLogoutTimer();
-                    showLoginOverlay(false);
-                    showTab('records');
-                    loadAllData();
-                } catch (error) {
-                    if (errorEl) {
-                        errorEl.innerText = error.message;
-                        errorEl.classList.remove('hidden');
-                    }
-                    if (userId.toLowerCase() === 'admin' || userId.toLowerCase() === 'identify.jvd@gmail.com') {
-                        adminFailedAttempts++;
-                        if (adminFailedAttempts >= 2) {
-                            const forgotContainer = document.getElementById('forgot-password-container');
-                            if (forgotContainer) forgotContainer.classList.remove('hidden');
-                        }
-                    } else {
-                        adminFailedAttempts = 0;
-                    }
-                } finally {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = 'Login';
-                    }
-                }
-            }
-
             function setupLoginUi() {
                 const versionEl = document.getElementById('login-app-version');
                 const menuVersionEl = document.getElementById('menu-app-version');
@@ -1709,13 +960,6 @@
 
                         if (firebaseUser && savedUser) {
                             currentUser = savedUser;
-                            
-                            // Log activity on session start
-                            if (!sessionStorage.getItem('activity_logged_' + currentUser.userId)) {
-                                logSchoolActivity(currentUser.userId);
-                                sessionStorage.setItem('activity_logged_' + currentUser.userId, 'true');
-                            }
-
                             updateCurrentUserUi();
                             hideSplashScreen();
                             
@@ -1880,57 +1124,6 @@
                 });
             }
 
-            function setupFilterCardLongPress(elementId, filterType, isBin = false) {
-                const el = document.getElementById(elementId);
-                if (!el) return;
-                
-                let lpTimer;
-                let lpTriggered = false;
-                
-                const startLP = (e) => {
-                    if (e.type === 'mousedown' && e.button !== 0) return;
-                    lpTriggered = false;
-                    lpTimer = setTimeout(() => {
-                        lpTriggered = true;
-                        if (navigator.vibrate) navigator.vibrate(50);
-                        
-                        if (isBin) {
-                            openRecycleBin();
-                            setTimeout(() => {
-                                if (!Array.isArray(bin) || bin.length === 0) return;
-                                toggleAllBinSelection();
-                            }, 100);
-                        } else {
-                            showTab('records');
-                            setChipFilter('status', filterType);
-                            setTimeout(() => {
-                                if (selectedRecords.size === 0) {
-                                    bulkToggleSelectAll();
-                                }
-                            }, 100);
-                        }
-                    }, 500);
-                };
-                
-                const cancelLP = () => { if (lpTimer) clearTimeout(lpTimer); };
-                
-                el.addEventListener('mousedown', startLP);
-                el.addEventListener('touchstart', startLP, {passive: true});
-                el.addEventListener('mouseup', (e) => {
-                    cancelLP();
-                    if (lpTriggered) { e.preventDefault(); e.stopPropagation(); }
-                });
-                el.addEventListener('touchend', cancelLP);
-                el.addEventListener('mouseleave', cancelLP);
-                el.addEventListener('touchcancel', cancelLP);
-                el.addEventListener('click', (e) => {
-                    if (lpTriggered) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-                }, true);
-            }
-
             function setupEventDelegation() {
                 const container = document.getElementById('records-list-container');
                 if (!container) return;
@@ -1953,13 +1146,6 @@
                     binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
                     binContainer.addEventListener('click', handleBinContainerClick);
                 }
-
-                // Add Filter Card Long Press Support
-                setupFilterCardLongPress('home-btn-unverified', 'unverified', false);
-                setupFilterCardLongPress('home-btn-pending', 'pending', false);
-                setupFilterCardLongPress('btn-unverified', 'unverified', false);
-                setupFilterCardLongPress('btn-pending', 'pending', false);
-                setupFilterCardLongPress('btn-recycle-bin', 'recycleBin', true);
             }
 
         function handleBinSelectionZoneEvent(e) {
@@ -2389,27 +1575,11 @@
                                 mergedDb.push(lRec);
                             }
                         });
-                        SchoolLocalDB.get('local_unverified').then(localUnverified => {
-                            if (localUnverified && Array.isArray(localUnverified)) {
-                                localUnverified.forEach(uRec => {
-                                    if (!mergedDb.some(m => String(m.id) === String(uRec.id) || (m.oldId && String(m.oldId) === String(uRec.id)))) {
-                                        mergedDb.push(uRec);
-                                    }
-                                });
-                            }
-                            db = mergedDb;
-                            demoFallbackLoaded = false;
-                            refreshUiAfterLoad();
-                            if (typeof done === 'function') done();
-                        }).catch(err => {
-                            db = mergedDb;
-                            demoFallbackLoaded = false;
-                            refreshUiAfterLoad();
-                            if (typeof done === 'function') done();
-                        });
-                    } else {
-                        if (typeof done === 'function') done();
+                        db = mergedDb;
+                        demoFallbackLoaded = false;
+                        refreshUiAfterLoad();
                     }
+                    if (typeof done === 'function') done();
                 });
             }
 
@@ -2515,7 +1685,7 @@
             function encryptLocal(str) { return btoa(xorCipher(str)); }
             function decryptLocal(str) { try { return xorCipher(atob(str)); } catch(e) { return ''; } }
 
-            const DEFAULT_CONFIG = { name: 'Delhi Public School', code: 'DPS', about: 'ID Card Management Portal', systemAbout: 'ID Card Management Portal', logo: './idapplogo.png' };
+            const DEFAULT_CONFIG = { name: 'Delhi Public School', code: 'DPS', about: 'ID Card Management Portal', logo: './idapplogo.png' };
             let schoolConfig = loadSchoolConfig();
 
             function loadSchoolConfig() {
@@ -2585,10 +1755,8 @@
                                 localStorage.setItem('identify_fb_std_meta', JSON.stringify(fbData.standardMeta));
                                 if (typeof fb_standard_meta !== 'undefined') fb_standard_meta = fbData.standardMeta;
                             }
-                            if (typeof fb_bootFromStorage === 'function') fb_bootFromStorage();
-                            if (typeof fb_renderForm === 'function') fb_renderForm();
-                            if (typeof generateDynamicFormFields === 'function') generateDynamicFormFields();
-                            if (typeof updateBrandingUI === 'function') updateBrandingUI();
+                                if (typeof fb_renderForm === 'function') fb_renderForm();
+                                if (typeof updateBrandingUI === 'function') updateBrandingUI();
                             }
                         });
                     } catch (fbErr) {
@@ -2617,7 +1785,7 @@
                 nameEls.forEach(id => { const el = document.getElementById(id); if (el) el.innerText = schoolConfig.name; });
                 const codeEl = document.getElementById('config-code'); if (codeEl) codeEl.value = schoolConfig.code;
                 const nameInput = document.getElementById('config-name'); if (nameInput) nameInput.value = schoolConfig.name;
-                const aboutEl = document.getElementById('settings-about-display'); if (aboutEl) aboutEl.innerText = schoolConfig.systemAbout || schoolConfig.about;
+                const aboutEl = document.getElementById('settings-about-display'); if (aboutEl) aboutEl.innerText = schoolConfig.about;
                 document.title = "IDentify-" + (schoolConfig.code || "DPS");
 
                 if (schoolConfig.logo) {
@@ -2922,8 +2090,8 @@
                     const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
                     
-                    if (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') {
-                        return; // skip deleted records in counts
+                    if (false) {
+                        return; // skip unverified in counts
                     }
 
                     totalCount++;
@@ -3141,7 +2309,7 @@
                 filterRow.classList.toggle('hidden', showBlankRecordCard);
                 const isAnyMode = mode !== 'none';
                 
-                if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     icon.className = 'fa-solid fa-arrow-left';
                 } else {
                     icon.className = isAnyMode ? 'fa-solid fa-xmark' : 'fa-solid fa-plus';
@@ -3149,7 +2317,7 @@
                 
                 const addBtnIcon = document.getElementById('add-btn-icon');
                 if (addBtnIcon) {
-                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((mode === 'builder' || mode === 'manage_school' || mode === 'dataInfo' || mode === 'schoolActivity') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         addBtnIcon.className = 'fa-solid fa-arrow-left text-sm';
                     } else {
                         addBtnIcon.className = isAnyMode ? 'fa-solid fa-xmark text-sm' : 'fa-solid fa-plus text-sm';
@@ -3192,18 +2360,18 @@
                     headerHtml = `<i class="fa-solid fa-school text-[#059669] mr-2.5"></i> Manage School`;
                     labelText = 'Manage School';
                     iconClass = 'fa-solid fa-school text-emerald-600';
+                } else if (mode === 'schoolActivity') {
+                    headerHtml = `<i class="fa-solid fa-clock-rotate-left text-[#059669] mr-2.5"></i> School Activity`;
+                    labelText = 'School Activity';
+                    iconClass = 'fa-solid fa-clock-rotate-left text-[#059669]';
                 } else if (mode === 'dataInfo') {
                     headerHtml = `<i class="fa-solid fa-database text-[#059669] mr-2.5"></i> Data Information`;
                     labelText = 'Data Information';
                     iconClass = 'fa-solid fa-database text-emerald-600';
                 } else if (mode === 'import_export') {
-                    headerHtml = `<i class="fa-solid fa-file-import text-[#059669] mr-2.5"></i> Import Data`;
-                    labelText = 'Import Data';
-                    iconClass = 'fa-solid fa-file-import text-emerald-600';
-                } else if (mode === 'recycleBin') {
-                    headerHtml = `<i class="fa-solid fa-trash-can text-[#059669] mr-2.5"></i> Recycle Bin`;
-                    labelText = 'Recycle Bin';
-                    iconClass = 'fa-solid fa-trash-can text-emerald-600';
+                    headerHtml = `<i class="fa-solid fa-file-export text-[#059669] mr-2.5"></i> Export Data`;
+                    labelText = 'Export Data';
+                    iconClass = 'fa-solid fa-file-export text-emerald-600';
                 } else if (mode === 'newEntry' || mode === 'student') {
                     headerHtml = `<i class="fa-solid fa-file-lines text-[#059669] mr-2.5"></i> Student Information Form`;
                     labelText = 'Student Information Form';
@@ -3246,7 +2414,7 @@
 
             function closeStudentForm() {
                 // Respect settings page navigation stack
-                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                     setBlankRecordMode('settings');
                     previousBlankRecordMode = 'none';
                     return;
@@ -3343,9 +2511,12 @@
                 if (icon && icon.classList.contains('fa-magnifying-glass') && forceOpen !== true) {
                     filterRecords();
                     
-                    icon.className = 'fa-solid fa-plus';
+                    icon.className = 'fa-solid fa-right-from-bracket';
                     const btn = document.getElementById('toggle-form-btn');
-                    if (btn) btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                    if (btn) {
+                        btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                        btn.onclick = confirmLogout;
+                    }
                     if (typeof dbSearchTimer !== 'undefined' && dbSearchTimer) clearTimeout(dbSearchTimer);
                     
                     const searchInput = document.getElementById('mainSearch');
@@ -3357,7 +2528,7 @@
                 const shouldForce = (forceOpen === true);
 
                 if (!shouldForce && blankRecordMode !== 'none') {
-                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
+                    if ((blankRecordMode === 'builder' || blankRecordMode === 'manage_school' || blankRecordMode === 'dataInfo' || blankRecordMode === 'schoolActivity' || blankRecordMode === 'import_export') && typeof previousBlankRecordMode !== 'undefined' && previousBlankRecordMode === 'settings') {
                         setBlankRecordMode('settings');
                         previousBlankRecordMode = 'none';
                         return;
@@ -3446,17 +2617,22 @@
                 if (search.value.trim().length > 0) {
                     icon.className = 'fa-solid fa-magnifying-glass';
                     btn.className = 'w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                    btn.onclick = () => toggleStudentForm();
                     
                     if (dbSearchTimer) clearTimeout(dbSearchTimer);
                     dbSearchTimer = setTimeout(() => {
-                        icon.className = 'fa-solid fa-plus';
+                        icon.className = 'fa-solid fa-right-from-bracket';
                         btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
-                    }, 12000);
+                        btn.onclick = confirmLogout;
+                    }, 7000);
                 } else {
-                    icon.className = 'fa-solid fa-plus';
+                    icon.className = 'fa-solid fa-right-from-bracket';
                     btn.className = 'w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform';
+                    btn.onclick = confirmLogout;
                     if (dbSearchTimer) clearTimeout(dbSearchTimer);
-                    filterRecords();
+                    
+                    // Automatically filter when user clears the search box
+                    filterDebounceTimer = setTimeout(() => { filterRecords(); }, 300);
                 }
             }
 
@@ -3607,7 +2783,7 @@
                     return {
                         'Sn': (() => {
                             const isRecVerified = (r.verified === true || String(r.verified).toLowerCase() === 'true' || r.verified === 'Completed');
-                            const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                            const si = (schoolConfig.code || "DPS").trim().toUpperCase() || "DPS";
                             if (isRecVerified) {
                                 const snVal = (r.sn && Number(r.sn) < 1000000000) ? r.sn : (index + 1);
                                 const year = new Date(r.createdAt || Date.now()).getFullYear().toString().slice(-2);
@@ -3684,15 +2860,6 @@
             let binLpTimer = null;
             let binLpDidTrigger = false;
 
-            function triggerBinSelection(id) {
-                if (binSelectedRecords.size === 0) {
-                    binLpDidTrigger = true;
-                    binSelectedRecords.add(String(id));
-                    if (navigator.vibrate) navigator.vibrate(50);
-                    renderRecycleBin();
-                }
-            }
-
             function binLpStart(id) {
                 if (binSelectedRecords.size > 0) return;
                 binLpDidTrigger = false;
@@ -3723,7 +2890,7 @@
                     binLpDidTrigger = false;
                     return;
                 }
-                permDeleteRecordFromBin(id);
+                permDelete(id);
             }
 
             function toggleBinSelection(id) {
@@ -3731,7 +2898,6 @@
                 if (binSelectedRecords.has(sid)) binSelectedRecords.delete(sid);
                 else binSelectedRecords.add(sid);
                 renderRecycleBin();
-                updateBulkHeader();
             }
 
             function toggleAllBinSelection() {
@@ -3741,7 +2907,6 @@
                     bin.forEach(x => binSelectedRecords.add(String(x.id)));
                 }
                 renderRecycleBin();
-                updateBulkHeader();
             }
 
             function bulkBinRestore() {
@@ -3765,7 +2930,6 @@
                     bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                     renderRecycleBin();
                     filterRecords();
-                    updateBulkHeader();
                 });
             }
 
@@ -3776,7 +2940,7 @@
                 ids.forEach(id => {
                     db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    serverCallSilent('permanentDelete', [id]);
+                    serverCallSilent('permDelete', [id]);
                     count++;
                 });
                 showToast(count + ' records permanently deleted');
@@ -3784,7 +2948,6 @@
                 bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                 renderRecycleBin();
                 filterRecords();
-                updateBulkHeader();
             }
 
             function renderRecycleBin() {
@@ -3792,10 +2955,6 @@
                 if (!container) return;
                 container.innerHTML = '';
                 
-                const filterRow = document.getElementById('class-filter-row');
-                if (filterRow) {
-                    filterRow.classList.remove('hidden');
-                }
                 if (bin.length === 0) {
                     container.innerHTML = `
                         <div class="flex flex-col items-center justify-center py-12 text-slate-400">
@@ -3805,19 +2964,32 @@
                         </div>
                     `;
                 } else {
-                    bin.forEach((x, idx) => {
+                    if (binSelectedRecords.size > 0) {
+                        container.innerHTML += `
+                            <div class="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-emerald-50 border-b border-emerald-100 shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-[18px] h-[18px] rounded-md border-2 border-emerald-600 bg-emerald-600 flex items-center justify-center cursor-pointer transition-all" onclick="toggleAllBinSelection()">
+                                        <i class="fa-solid ${binSelectedRecords.size === bin.length ? 'fa-check text-[10px] text-white' : 'fa-minus text-[10px] text-white'}"></i>
+                                    </div>
+                                    <span class="font-bold text-[14px] text-emerald-800">${binSelectedRecords.size} Selected</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="bulkBinRestore()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[13px] font-bold shadow-sm hover:bg-emerald-700 transition-all flex items-center gap-1.5"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+                                    <button onclick="bulkBinDelete()" class="px-3 py-1.5 bg-rose-500 text-white rounded-lg text-[13px] font-bold shadow-sm hover:bg-rose-600 transition-all flex items-center gap-1.5"><i class="fa-solid fa-trash-can"></i> Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    bin.forEach(x => {
                         const deletedDate = x.deletedAt ? new Date(x.deletedAt).toLocaleDateString() : 'Unknown';
                         const initial = (x.studentName || 'S').charAt(0).toUpperCase();
                         const photoSrc = fixDriveImageUrl(x.docUrl || x.photoData || '');
                         const hasDoc = x.docUrl || x.photoData;
                         const isRecVerified = x.verified === true || String(x.verified).toLowerCase() === 'true';
-                        const rowClasses = ['flex', 'items-stretch', 'border-b', 'border-gray-100', 'h-[72px]', 'transition', 'cursor-pointer', 'hover:bg-slate-50/50', 'active:bg-emerald-50/40', 'bin-selection-zone', 'select-none', 'overflow-hidden'];
-                        if (idx === 0) rowClasses.push('rounded-t-3xl');
-                        if (idx === bin.length - 1) rowClasses.push('rounded-b-3xl', 'last:border-0');
-                        if (idx !== bin.length - 1) rowClasses.push('last:border-0');
                         
                         container.innerHTML += `
-                            <div class="${rowClasses.join(' ')}" style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: pan-y;" data-id="${escapeInlineId(x.id)}" oncontextmenu="event.preventDefault(); triggerBinSelection('${escapeInlineId(x.id)}'); return false;" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''}>
+                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40 bin-selection-zone" data-id="${escapeInlineId(x.id)}" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''}>
                                 <div class="flex flex-1 items-stretch min-w-0">
                                     <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
                                         ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
@@ -3853,25 +3025,11 @@
             }
 
             function openRecycleBin() {
-                setBlankRecordMode('recycleBin');
-                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
-                if (bin.length === 0) {
-                    const dummy1 = { id: 'dummy-1', studentName: 'Rahul Kumar', sclass: '10th A', isDeleted: true, deletedAt: new Date().toISOString() };
-                    const dummy2 = { id: 'dummy-2', studentName: 'Priya Sharma', sclass: '9th B', isDeleted: true, deletedAt: new Date(Date.now() - 86400000).toISOString() };
-                    db.push(dummy1, dummy2);
-                    bin = [dummy1, dummy2];
-                }
                 renderRecycleBin();
-            }
-
-            function openDevPhoto() {
-                window.open('Adminphoto .jpeg', '_blank');
-            }
-
-            function openDeveloperProfile(event) {
-                if (event) event.preventDefault();
-                const profileUrl = 'https://www.instagram.com/i_am.javed_?igsh=MW9nOXhqb3MwNzFvZA==';
-                window.open(profileUrl, '_blank');
+                serverCall('getBin', [], (rows) => {
+                    bin = rows || [];
+                    renderRecycleBin();
+                });
             }
 
             function updateBinBadge() {
@@ -3919,17 +3077,17 @@
             }
 
             function deleteRow(id) {
-                showModal('confirm', 'Delete Record?', 'Move this record to Recycle Bin?', () => {
+                showModal('confirm', 'Delete Record?', 'Permanently delete this record?', () => {
                     const deleted = findRecordById(db, id);
                     if (deleted) {
                         addActivity('DELETE', deleted);
-                        deleted.isDeleted = true;
-                        deleted.deletedAt = new Date().toISOString();
-                        storeRecordInDb(deleted);
-                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, deleted).catch(()=>{}); } catch(e){}
-                        serverCallSilent('updateRecord', [deleted], ()=>{}, ()=>{});
-                        showToast('Record moved to Recycle Bin');
-                        renderCurrentRecordsPage();
+                        registerLocalDeletion(id);
+                        db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
+                    if (typeof window.queueServerDraftSync === 'function') window.queueServerDraftSync();
+                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
+                        showToast('Record Deleted');
+                        renderHomeAnalysis();
                         filterRecords();
                     } else {
                         showModal('error', 'Failed', 'Record not found.');
@@ -3949,11 +3107,18 @@
                     `;
                     document.body.appendChild(overlay);
 
-                    serverCallSilent('deleteAllRecords', [], () => {
+                    serverCallSilent('deleteAllRecords', [], async () => {
                         db = [];
                         try { localStorage.removeItem('deleted_record_ids'); } catch(e){}
                         
                         try { if (window.idbClear) idbClear(IDB_STORE_RECORDS).catch(()=>{}); } catch(e){}
+                        
+                        // Send cross-device wipe signal
+                        try {
+                            const sysDoc = window.firebaseAPI.doc(window.db, "system", "schoolConfig");
+                            await window.firebaseAPI.updateDoc(sysDoc, { lastWipeTimestamp: Date.now() });
+                        } catch(e) { console.warn('Could not broadcast wipe signal', e); }
+
                         document.body.removeChild(overlay);
                         showToast('All System Data Deleted Successfully');
                         renderHomeAnalysis();
@@ -3964,46 +3129,6 @@
                         showModal('error', 'Error Deleting Data', 'An error occurred while deleting data: ' + (err.message || 'Unknown error'));
                     });
                 }, 'Delete All');
-            }
-
-            function restoreRecordFromBin(id) {
-                const item = findRecordById(db, id);
-                if (!item) {
-                    showModal('error', 'Failed', 'Record not found in bin.');
-                    return;
-                }
-                
-                item.isDeleted = false;
-                item.isRestored = true;
-                item.deletedAt = null;
-                storeRecordInDb(item);
-                try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, item).catch(()=>{}); } catch(e){}
-                serverCallSilent('restoreRecord', [id], ()=>{}, ()=>{});
-                
-                addActivity('RESTORE', item);
-                showToast('Record Restored Successfully');
-                bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
-                renderRecycleBin();
-                renderCurrentRecordsPage();
-            }
-
-            function permDeleteRecordFromBin(id) {
-                                    const item = findRecordById(db, id);
-                    if (!item) {
-                        showModal('error', 'Failed', 'Record not found in bin.');
-                        return;
-                    }
-                    
-                    db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
-                    if (typeof window.queueServerDraftSync === 'function') window.queueServerDraftSync();
-                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
-                    serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
-                    
-                    addActivity('PERM_DELETE', item);
-                    showToast('Record Permanently Deleted');
-                    bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
-                    renderRecycleBin();
-                    filterRecords();
             }
 
             function restoreRecord(id) {
@@ -4035,13 +3160,14 @@
             }
 
             function permDelete(id) {
+                if (!confirm('Permanently Delete?')) return;
                 const item = findRecordById(bin, id);
                 if (item) {
                     db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     addActivity('PERM_DELETE', item);
                 }
-                serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
+                serverCallSilent('permDelete', [id], ()=>{}, ()=>{});
                 showToast('Permanently Deleted');
                 bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                 renderRecycleBin();
@@ -4577,7 +3703,6 @@
                     resetUploadFieldLabel('Saved âœ…');
                     pendingUploadedDocument = null;
                     queueServerDraftSync();
-                    renderCurrentRecordsPage();
                 });
             }
             function triggerPhotoUpload() {
@@ -4615,11 +3740,8 @@
             }
             function handleFrameClick(e) {
                 if (photoData || pendingUploadedDocument) return;
-                if (typeof activeStatusFilter !== 'undefined' && activeStatusFilter === 'pending' && blankRecordMode === 'preview') {
-                    triggerDirectPreviewUpload(false);
-                } else {
-                    document.getElementById('photo-upload').click();
-                }
+                // If no photo, open upload
+                document.getElementById('photo-upload').click();
             }
             function setupPhotoUpload() {
                 const uploadInput = document.getElementById('photo-upload');
@@ -4660,7 +3782,6 @@
 
                 queueDraftSave('Document');
                 queueServerDraftAutosave();
-                renderCurrentRecordsPage();
             }
             function showStatusCard(title, message, options = {}) {
                 const { progress = 22, tone = 'working', dismissible = false, autoHideMs = 0 } = options;
@@ -4810,7 +3931,12 @@
                     // Calculate Local SN if missing
                     let nextSn = existing ? existing.sn : null;
                     if (!nextSn) {
-                        nextSn = Date.now();
+                        let maxSn = 0;
+                        db.forEach(r => {
+                            const val = parseInt(r.sn, 10);
+                            if (!isNaN(val) && val > maxSn) maxSn = val;
+                        });
+                        nextSn = maxSn + 1;
                     }
 
                     // Check duplicate record locally (Student Name, Father Name, Class)
@@ -4833,7 +3959,7 @@
                         isSavingRecord = false;
                         showModal('confirm', 
                             'Duplicate Entry Found!', 
-                            `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span>.<br><br>Would you like to open the existing record or proceed to create a new one?`, 
+                            `An existing record was found with Student Name: <span class="text-slate-900 font-bold text-[15px]">"${n}"</span>, Father Name: <span class="text-slate-900 font-bold text-[15px]">"${fatherVal}"</span>, and Class: <span class="text-slate-900 font-bold text-[15px]">"${cl}"</span> (Record ID: <span class="text-slate-900 font-bold text-[15px]">${duplicate.id}</span>).<br><br>Would you like to open the existing record or proceed to create a new one?`, 
                             () => {
                                 proceedSave.bypassDuplicateCheck = true;
                                 proceedSave();
@@ -4841,11 +3967,7 @@
                             'Create New'
                         );
                         
-                        // Show close icon at top right
-                        const closeIcon = document.getElementById('modal-close-icon');
-                        if (closeIcon) closeIcon.classList.remove('hidden');
-
-                        // Customize modal actions to support "Open Existing", "Create New"
+                        // Customize modal actions to support "Open Existing", "Create New" and "Cancel"
                         const actions = document.getElementById('modal-actions');
                         if (actions) {
                             actions.innerHTML = `
@@ -4854,6 +3976,7 @@
                                         <button id="modal-load-old-btn" class="flex-1 py-3 bg-emerald-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-folder-open text-xs"></i> Open Existing</button>
                                         <button id="modal-confirm-btn" class="flex-1 py-3 bg-amber-500 text-white rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-plus text-xs"></i> Create New</button>
                                     </div>
+                                    <button onclick="closeModal()" class="w-full py-3 bg-slate-200 text-slate-800 rounded-[18px] font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-sm"><i class="fa-solid fa-xmark text-xs"></i> Cancel</button>
                                 </div>
                             `;
                             
@@ -4895,7 +4018,7 @@
                     }
 
                     const rec = {
-                        sn: nextSn,
+                        sn: existing ? existing.sn : 0,
                         id: finalId,
                         oldId: oldId, // Send old ID to server so it can replace the row
                         sclass: cl, gender: g, studentName: n,
@@ -4917,7 +4040,7 @@
                         verified: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? false : !!(existing && existing.verified && String(existing.verified).toLowerCase() !== 'false'),
                         returned: false,
                         isRestored: false,
-                        status: (existing && existing.verified && String(existing.verified).toLowerCase() !== 'false' && !(String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? existing.status : (hasPendingOrSavedDoc ? 'unverified' : 'pending'),
+                        status: (existing && (String(existing.verified).toLowerCase() === 'returned' || existing.returned === true || String(existing.returned).toLowerCase() === 'true' || String(existing.status).toLowerCase() === 'returned')) ? (hasPendingOrSavedDoc ? 'unverified' : 'pending') : (existing ? existing.status : (hasPendingOrSavedDoc ? 'unverified' : 'pending')),
                         _serverSaved: existing ? !!existing._serverSaved : false,
                         // Preserved metadata fields
                         timestamp: existing ? (existing.timestamp || getFormattedTimestamp(nowTs)) : getFormattedTimestamp(nowTs),
@@ -4946,39 +4069,62 @@
                         toggleSaveLoading(false);
                         addActivity(eid ? 'UPDATE' : 'ADD', rec);
                         if (!eid) clearDraft();
-                        const existingInDb = db.find(r => String(r.id) === String(rec.id));
-                        if (existingInDb) {
-                            rec._pending = existingInDb._pending;
-                            rec._syncStatus = existingInDb._syncStatus;
-                            rec._serverSaved = existingInDb._serverSaved;
-                        }
                         storeRecordInDb(rec);
                         renderHomeAnalysis();
                         filterRecords();
-                        if (eid) {
-                            showModal('success', 'Data Updated Successfully', '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
-                        }
+                        const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
+                        const modalTitle = eid ? 'Data Updated Successfully' : (isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully');
+                        showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
 
-                    isPreviewFromSave = !eid;
-                    const _immediatePhotoSrc = _getPreviewPhotoSrc();
-                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc, _isUnsaved: !eid, _eid: eid };
-                    
-                    if (eid) {
-                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, previewRecord).catch(()=>{}); } catch(e){}
-                        serverCallSilent('updateRecord', [previewRecord], () => {});
+                    const saveToSheet = () => {
+                        const localRec = { ...rec };
+                        localRec.createdAt = localRec.createdAt || Date.now();
+                        localRec.updatedAt = Date.now();
+                        localRec._pending = true;
+                        localRec._syncStatus = 'pending';
+                        db = [localRec, ...db.filter(x => x.id !== localRec.id)];
+                        
+                        // Persist to IndexedDB as well for robust offline storage (records + image blob)
+                        try {
+                            idbPut(IDB_STORE_RECORDS, { ...localRec }).catch(() => { });
+                            if (photoData && photoData.startsWith('data:image')) {
+                                const blob = dataUrlToBlob(photoData);
+                                if (blob) {
+                                    const attachId = `${localRec.id}::photo`;
+                                    idbPut(IDB_STORE_ATTACH, { id: attachId, blob: blob, savedAt: Date.now() }).catch(() => { });
+                                }
+                            }
+                        } catch (e) { console.warn('IDB persist failed', e); }
+                        
+                        // Push to Firebase instantly
+                        serverCallSilent('updateRecord', [localRec], () => {
+                            const updatedSource = db.find(r => r.id === localRec.id);
+                            if (updatedSource) {
+                                updatedSource._serverSaved = true;
+                                updatedSource._syncStatus = 'synced';
+                                renderCurrentRecordsPage();
+                            }
+                        });
+                        
                         finalizeSave();
+                    };
+
+                    isPreviewFromSave = !eid;
+                    isSavingRecord = false;
+                    toggleSaveLoading(false);
+                    const _immediatePhotoSrc = _getPreviewPhotoSrc();
+                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc };
+                    if (eid) {
                         closeStudentForm();
                     } else {
-                        isSavingRecord = false;
-                        toggleSaveLoading(false);
                         setBlankRecordMode('preview');
                     }
 
-                    // Data is no longer saved locally or remotely here for add mode.
-                    // It will be saved when "Save & New" or "Verify" is clicked on the preview card.
+                    // Direct local save, skip Drive upload until manual sync
+                    saveToSheet();
                 } catch (error) {
                     console.error('Save error:', error);
                     isSavingRecord = false;
@@ -5023,42 +4169,23 @@
                 const toggleIcon = document.getElementById('toggle-icon');
                 const badge = document.getElementById('selected-count-badge');
 
-                const isRecycleBinMode = activeStatusFilter === 'recycleBin';
-                const count = isRecycleBinMode ? binSelectedRecords.size : selectedRecords.size;
-                const canShowBulkActions = count > 0 && (isRecycleBinMode || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all')));
-                const filterRow = document.getElementById('class-filter-row');
-                if (filterRow && isRecycleBinMode) {
-                    filterRow.classList.remove('hidden');
-                }
+                const count = selectedRecords.size;
 
-                const bulkSelectToggle = document.getElementById('btn-bulk-select-toggle');
-                const bulkSelectCount = document.getElementById('bulk-select-count');
-                const bulkSelectIcon = document.getElementById('bulk-select-icon');
-
-                if (canShowBulkActions) {
+                if (count > 0 && (activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all')))) {
                     if (bulkContainer) bulkContainer.classList.remove('hidden');
                     if (bulkContainer) bulkContainer.classList.add('flex');
-                    if (bulkSelectToggle) bulkSelectToggle.classList.remove('hidden');
-                    if (bulkSelectCount) bulkSelectCount.innerText = count;
-                    if (bulkSelectIcon) bulkSelectIcon.className = `fa-solid ${count === (isRecycleBinMode ? bin.length : currentRenderedRecords.length) ? 'fa-square-check' : 'fa-square'} text-sm text-white`;
-                    if (bulkSelectToggle) bulkSelectToggle.onclick = isRecycleBinMode ? toggleAllBinSelection : bulkToggleSelectAll;
-
+                    
                     const verifyBtn = document.getElementById('btn-bulk-verify');
-                    const restoreBtn = document.getElementById('btn-bulk-restore');
-                    const deleteBtn = document.getElementById('btn-bulk-delete');
-                    if (restoreBtn) {
-                        restoreBtn.classList.toggle('hidden', !isRecycleBinMode);
-                        restoreBtn.onclick = bulkBinRestore;
-                    }
+                    const identifyBtn = document.getElementById('btn-bulk-identify');
                     if (verifyBtn) {
-                        if (isRecycleBinMode || activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all') {
+                        if (activeStatusFilter === 'pending' || activeStatusFilter === 'verified' || activeStatusFilter === 'all') {
                             verifyBtn.classList.add('hidden');
                         } else {
                             verifyBtn.classList.remove('hidden');
-                            verifyBtn.onclick = bulkVerifySelected;
                         }
                     }
                     const exportBtn = document.getElementById('btn-bulk-export');
+                    const deleteBtn = document.getElementById('btn-bulk-delete');
                     
                     if (exportBtn) {
                         if (currentUser && currentUser.userId === 'admin' && activeStatusFilter === 'verified') {
@@ -5067,36 +4194,43 @@
                             exportBtn.classList.add('hidden');
                         }
                     }
+                    
+                    const downloadJpgBtn = document.getElementById('btn-bulk-download-jpg');
+                    if (downloadJpgBtn) {
+                        if (currentUser && currentUser.userId === 'admin' && activeStatusFilter === 'verified') {
+                            downloadJpgBtn.classList.remove('hidden');
+                        } else {
+                            downloadJpgBtn.classList.add('hidden');
+                        }
+                    }
                     if (deleteBtn) {
-                        if (isRecycleBinMode || (currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending') {
+                        if ((currentUser && currentUser.userId === 'admin') || activeStatusFilter === 'unverified') {
                             deleteBtn.classList.remove('hidden');
-                            deleteBtn.onclick = isRecycleBinMode ? bulkBinDelete : bulkDeleteSelected;
                         } else {
                             deleteBtn.classList.add('hidden');
                         }
                     }
 
+                    // Re-purpose the main button as Select All/Unselect All toggle WITH count
                     if (toggleBtn) {
-                        toggleBtn.style.display = '';
-                        toggleBtn.style.width = '36px';
-                        toggleBtn.onclick = resetBulkSelection;
-                        toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
-                        toggleBtn.classList.remove('bg-emerald-600', 'bg-rose-500');
-                        toggleBtn.classList.add((activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || activeStatusFilter === 'recycleBin') ? 'bg-rose-500' : 'bg-emerald-600');
+                        const visibleUnverified = currentRenderedRecords; // Already filtered by filterRecords()
+                        const isAllSelected = (count > 0 && count === visibleUnverified.length);
+
+                        toggleBtn.style.display = ''; // Ensure it is shown for selection
+                        toggleBtn.style.width = '72px';
+                        toggleBtn.onclick = bulkToggleSelectAll;
+                        toggleBtn.innerHTML = `
+                    <div class="flex items-center justify-center gap-2 w-full px-1">
+                        <span class="text-[14.5px] font-black leading-none">${count}</span>
+                        <i class="fa-regular ${isAllSelected ? 'fa-square-check' : 'fa-square'} text-base"></i>
+                    </div>
+                `;
                     }
                 } else {
                     if (bulkContainer) bulkContainer.classList.add('hidden');
                     if (bulkContainer) bulkContainer.classList.remove('flex');
-                    if (bulkSelectToggle) bulkSelectToggle.classList.add('hidden');
 
                     if (toggleBtn) {
-                        if (blankRecordMode === 'recycleBin') {
-                            toggleBtn.classList.remove('bg-emerald-600');
-                            toggleBtn.classList.add('bg-rose-500');
-                        } else {
-                            toggleBtn.classList.remove('bg-rose-500');
-                            toggleBtn.classList.add('bg-emerald-600');
-                        }
                         if (currentUser && currentUser.userId === 'admin') {
                             toggleBtn.style.display = '';
                             toggleBtn.style.width = '36px';
@@ -5110,14 +4244,9 @@
                         } else {
                             toggleBtn.style.display = '';
                             toggleBtn.style.width = '36px';
-                            if (blankRecordMode === 'recycleBin') {
-                                toggleBtn.onclick = () => setBlankRecordMode('none');
-                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid fa-xmark text-sm"></i>`;
-                            } else {
-                                toggleBtn.onclick = () => toggleStudentForm();
-                                const isAnyMode = blankRecordMode !== 'none';
-                                toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
-                            }
+                            toggleBtn.onclick = () => toggleStudentForm();
+                            const isAnyMode = blankRecordMode !== 'none';
+                            toggleBtn.innerHTML = `<i id="toggle-icon" class="fa-solid ${isAnyMode ? 'fa-xmark text-sm' : 'fa-solid fa-plus text-sm'}"></i>`;
                         }
                     }
                 }
@@ -5126,21 +4255,8 @@
             function resetBulkSelection() {
                 syncSelectedRecordsSection();
                 selectedRecords.clear();
-                if (activeStatusFilter === 'recycleBin') {
-                    binSelectedRecords.clear();
-                    renderRecycleBin();
-                } else {
-                    renderCurrentRecordsPage();
-                }
+                renderCurrentRecordsPage();
                 updateBulkHeader();
-            }
-
-            function handleBulkToggleSelectAll() {
-                if (activeStatusFilter === 'recycleBin') {
-                    toggleAllBinSelection();
-                } else {
-                    bulkToggleSelectAll();
-                }
             }
 
             function toggleRecordSelection(id, event) {
@@ -5224,7 +4340,6 @@
                         selectedRecords.clear();
                         filterRecords();
                         renderHomeAnalysis();
-                        updateBulkHeader();
                     }
                 }, 'Yes, Verify');
             }
@@ -5254,14 +4369,10 @@
                 showModal('confirm', 'Delete Selected?', `Are you sure you want to delete ${selectedRecords.size} records?`, () => {
                     const idsToDelete = Array.from(selectedRecords);
                     idsToDelete.forEach(id => {
-                        const rec = findRecordById(db, id);
-                        if(rec) {
-                            rec.isDeleted = true;
-                            rec.deletedAt = new Date().toISOString();
-                            storeRecordInDb(rec);
-                            try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
-                            serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
-                        }
+                        registerLocalDeletion(id);
+                        db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
+                        try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                        serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
                     });
 
                     
@@ -5269,7 +4380,6 @@
                     selectedRecords.clear();
                     filterRecords();
                     renderHomeAnalysis();
-                    updateBulkHeader();
                 }, 'Yes, Delete');
             }
 
@@ -5289,7 +4399,89 @@
                 }, 'Yes, Send');
             }
 
-                        async function bulkExportSelected() {
+            async function bulkDownloadSelectedJpg() {
+                if (selectedRecords.size === 0) return;
+                
+                const count = selectedRecords.size;
+                const btn = document.getElementById('btn-bulk-download-jpg');
+                const origHtml = btn ? btn.innerHTML : '';
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[16px]"></i>';
+                
+                const origMode = blankRecordMode;
+                const origPreview = previewRecord;
+                
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh';
+                overlay.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+                overlay.style.zIndex = '999999';
+                overlay.style.display = 'flex'; overlay.style.flexDirection = 'column'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.color = 'white';
+                overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-5xl mb-6 text-amber-500"></i><div id="bulk-jpg-progress" class="text-2xl font-black tracking-widest uppercase">Generating 0 / ' + count + '</div><div class="text-sm text-slate-400 mt-2">Please do not close this window</div>';
+                document.body.appendChild(overlay);
+
+                try {
+                    const zip = new JSZip();
+                    const folder = zip.folder("ID_Cards_JPG");
+                    let doneCount = 0;
+                    
+                    const recordsToExport = [];
+                    selectedRecords.forEach(id => {
+                        const rec = db.find(x => String(x.id) === String(id));
+                        if (rec) recordsToExport.push(rec);
+                    });
+
+                    for (let i = 0; i < recordsToExport.length; i++) {
+                        const rec = recordsToExport[i];
+                        doneCount++;
+                        document.getElementById('bulk-jpg-progress').innerText = `Generating ${doneCount} / ${count}`;
+                        
+                        previewRecord = rec;
+                        setBlankRecordMode('preview'); 
+                        
+                        // Wait for render and images to load
+                        await new Promise(res => setTimeout(res, 400));
+                        
+                        const card = document.querySelector('.preview-dark-card');
+                        if (card) {
+                            const actionBars = card.querySelectorAll('.preview-action-bar');
+                            actionBars.forEach(bar => bar.style.display = 'none');
+                            
+                            const canvas = await html2canvas(card, { scale: 2, useCORS: true, backgroundColor: '#1e293b' });
+                            
+                            actionBars.forEach(bar => bar.style.display = '');
+                            
+                            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                            const sn = rec.sn ? rec.sn : 'Unknown';
+                            const safeName = (rec.studentName || rec.name || 'Unknown').replace(/[^a-zA-Z0-9\s]/g, '_').trim();
+                            folder.file(`ID_Card_${sn}_${safeName}.jpg`, imgData.split(',')[1], {base64: true});
+                        }
+                    }
+                    
+                    document.getElementById('bulk-jpg-progress').innerText = "Zipping Files...";
+                    const content = await zip.generateAsync({type:"blob"});
+                    const downloadLink = document.createElement("a");
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = `ID_Cards_${new Date().toISOString().split('T')[0]}.zip`;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    showToast("Downloaded Successfully!");
+                } catch (e) {
+                    console.error("Bulk JPG Error:", e);
+                    showToast("Error generating JPGs", true);
+                } finally {
+                    if (btn) btn.innerHTML = origHtml;
+                    document.body.removeChild(overlay);
+                    previewRecord = origPreview;
+                    setBlankRecordMode(origMode);
+                    if (origMode === 'none') {
+                        renderCurrentRecordsPage();
+                    }
+                }
+            }
+
+            async function bulkExportSelected() {
                 if (selectedRecords.size === 0) return;
                 
                 showToast("Preparing Export... Please wait.");
@@ -5319,18 +4511,18 @@
                         let qrFileName = "";
                         if (qrEnabled) {
                             try {
-                                let qrLines = [];
-                                savedQrFields.forEach(f => {
-                                    let label = f.toUpperCase();
-                                    if (f === 'id') label = 'System ID';
-                                    else if (typeof FB_STANDARD_FIELDS !== 'undefined' && FB_STANDARD_FIELDS.some(sf => sf.id === f)) {
-                                        label = typeof fb_getStandardLabel === 'function' ? fb_getStandardLabel(f, FB_STANDARD_FIELDS.find(sf => sf.id === f).label) : FB_STANDARD_FIELDS.find(sf => sf.id === f).label;
-                                    } else if (typeof fb_fields !== 'undefined' && fb_fields.some(cf => cf.id === f)) {
-                                        label = fb_fields.find(cf => cf.id === f).label || f;
-                                    }
-                                    qrLines.push(`${label}: ${rec[f] || "-"}`);
-                                });
-                                let qrVal = qrLines.join('\n');
+                                let qrVal = "";
+                                if (savedQrFields.length === 1 && savedQrFields[0] === 'id') {
+                                    qrVal = String(rec.id);
+                                } else {
+                                    const obj = {};
+                                    savedQrFields.forEach(f => {
+                                        // For special labels, we might want to map keys to labels if needed. 
+                                        // But raw data works.
+                                        obj[f] = rec[f] || "";
+                                    });
+                                    qrVal = JSON.stringify(obj);
+                                }
                                 const qr = new QRious({
                                     value: qrVal,
                                     size: 300,
@@ -5490,19 +4682,9 @@
                     const isRecVerified = (x.verified === true || String(x.verified).toLowerCase() === 'true' || x.verified === 'Completed') && !isReturned;
                     const hasAppPhoto = (x.docUrl && x.docUrl.length > 10) || (x.photoData && x.photoData.length > 10) || (x.docFileId && String(x.docFileId).length > 5);
 
-                    let matchesClass = true;
-                    if (activeClassFilter !== 'all') matchesClass = (x.sclass === activeClassFilter);
-
-                    if (activeStatusFilter === 'recycleBin') {
-                        return (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') && matchesText && matchesClass;
-                    }
-                    if (x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true') {
-                        return false;
-                    }
-
                     if (currentUser && currentUser.userId === 'admin') {
-                        // Admin should not see pending records (without photos)
-                        if (activeStatusFilter === 'pending' || (!isRecVerified && !hasAppPhoto)) {
+                        // Admin should ONLY see verified records
+                        if (!isRecVerified) {
                             return false;
                         }
                     }
@@ -5515,7 +4697,8 @@
                         matchesStatus = (!isRecVerified && !hasAppPhoto) && !isReturned;
                     }
 
-
+                    let matchesClass = true;
+                    if (activeClassFilter !== 'all') matchesClass = (x.sclass === activeClassFilter);
                     return matchesText && matchesStatus && matchesClass;
                 });
                 renderRecords(res);
@@ -5637,7 +4820,6 @@
                 }
 
                 const total = currentRenderedRecords.length;
-                const dbTotal = db.length;
                 const startIndex = 0;
                 const showing = Math.min(currentRenderLimit, total);
                 countEl.innerHTML = `<i class="fa-solid fa-users text-[10px] mr-1"></i> ${total}`;
@@ -5719,12 +4901,53 @@
                     </tr>`;
             }
 
-            function buildRecycleBinHtml() {
+            async function fetchAndRenderSchoolActivity() {
+                const listEl = document.getElementById('school-activity-list');
+                if (!listEl) return;
+                
+                listEl.innerHTML = '<div class="flex items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>';
+                
+                try {
+                    const { collection, getDocs, query, orderBy, limit } = window.firebaseAPI;
+                    const q = query(collection(window.db, "activityLogs"), orderBy("timestamp", "desc"), limit(50));
+                    const snapshot = await getDocs(q);
+                    
+                    if (snapshot.empty) {
+                        listEl.innerHTML = '<div class="flex flex-col items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-ghost text-4xl mb-3"></i><p>No activity logs found</p></div>';
+                        return;
+                    }
+                    
+                    let html = '<div class="overflow-x-auto"><table class="w-full text-left text-sm text-slate-600"><thead class="text-xs text-slate-400 uppercase bg-slate-50 border-b"><tr><th class="px-4 py-3">Date & Time</th><th class="px-4 py-3">User</th><th class="px-4 py-3">Device</th><th class="px-4 py-3">Location</th></tr></thead><tbody>';
+                    
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        const timeStr = new Date(d.timestamp).toLocaleString();
+                        const deviceIcon = d.deviceInfo === 'Mobile' ? 'fa-mobile-screen-button' : 'fa-desktop';
+                        html += `<tr class="border-b hover:bg-slate-50">
+                            <td class="px-4 py-3 font-medium whitespace-nowrap text-slate-700">${timeStr}</td>
+                            <td class="px-4 py-3"><div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-xs font-bold">${d.email ? d.email[0].toUpperCase() : '?'}</div>${d.email || 'Unknown'}</div></td>
+                            <td class="px-4 py-3"><i class="fa-solid ${deviceIcon} text-slate-400 mr-2"></i>${d.deviceInfo || 'Unknown'}</td>
+                            <td class="px-4 py-3 text-slate-500">${d.location || 'Unknown'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    listEl.innerHTML = html;
+                    
+                } catch(err) {
+                    console.error("Failed to fetch activity logs", err);
+                    listEl.innerHTML = '<div class="p-8 text-center text-rose-500">Failed to load logs. You might need to add Firestore index for this query.</div>';
+                }
+            }
+
+            function buildSchoolActivityHtml() {
+                setTimeout(fetchAndRenderSchoolActivity, 100);
                 return `
-                    <div class="flex-1 w-full overflow-y-auto min-h-0 bg-white" id="bin-content" style="min-height: 100%;">
-                        <!-- content will be injected by renderRecycleBin -->
+                <div class="flex flex-col h-full bg-white rounded-3xl p-6 shadow-sm border border-slate-100 mt-2">
+                    <div id="school-activity-list" class="flex-1 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-inner">
+                        <div class="flex items-center justify-center p-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
                     </div>
-                `;
+                </div>`;
             }
 
             function buildDataInformationHtml() {
@@ -5789,9 +5012,8 @@
                 syncSelectedRecordsSection();
 
                 const isPreview = (showBlankRecordCard && blankRecordMode === 'preview');
-                const isRecycleBinView = blankRecordMode === 'recycleBin';
 
-                t.className = ((showBlankRecordCard && !isRecycleBinView) || isPreview)
+                t.className = (showBlankRecordCard || isPreview)
                     ? 'overflow-visible bg-transparent shadow-none border-0 rounded-none'
                     : 'system-card rounded-3xl overflow-hidden';
 
@@ -5908,7 +5130,7 @@
                         const aspectStyle = `aspect-ratio: ${pWidth} / ${pHeight};`;
 
                         t.innerHTML = `
-                <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 relative" ${isPreviewFromSave ? '' : 'ontouchstart="handlePreviewTouchStart(event)" ontouchend="handlePreviewTouchEnd(event)"'}>
+                <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 relative" ${isPreviewFromSave ? '' : 'onmousedown="handlePreviewTouchStart(event)" onmouseup="handlePreviewTouchEnd(event)" onmouseleave="handlePreviewTouchCancel(event)" ontouchstart="handlePreviewTouchStart(event)" ontouchend="handlePreviewTouchEnd(event)" ontouchcancel="handlePreviewTouchCancel(event)"'}>
                     
                     ${isPreviewFromSave ? '' : `
                     <!-- Left Navigation Zone (Previous Card) -->
@@ -5931,7 +5153,6 @@
                                 <div class="flex items-center justify-center h-full w-full ${hasDoc ? 'hidden' : ''}">
                                     <i class="fa-solid fa-user-tie text-[#05996c] text-[130px]"></i>
                                 </div>
-
                             </div>
                         </div>
 
@@ -5982,7 +5203,7 @@
                                     <i class="fa-solid fa-hashtag text-[#05996c] text-[10px]"></i>
                                     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">SN: ${ (() => {
                                         const isRecVerified = (rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Completed');
-                                        const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
+                                        const si = (schoolConfig.code || "DPS").trim().toUpperCase() || "DPS";
                                         if (isRecVerified) {
                                             const snVal = (rec.sn && Number(rec.sn) < 1000000000) ? rec.sn : '0';
                                             const year = new Date(rec.createdAt || Date.now()).getFullYear().toString().slice(-2);
@@ -6001,7 +5222,7 @@
                         ${(isPreviewVerified || (rec.verified === 'Completed' && !isReturned)) ? 
                             (currentUser && currentUser.userId === 'admin' && rec.verified !== 'Completed' ? `
                             <!-- Admin Verified Actions Bar -->
-                            <div class="flex items-center justify-between gap-3 mt-2">
+                            <div class="flex items-center justify-between gap-3 mt-2 preview-action-bar">
                                 <button onclick="deleteFromPreview()" class="premium-btn-green flex-1 !py-2.5 !rounded-[18px] !bg-rose-500 hover:!bg-rose-600 !border-rose-600 shadow-sm text-[14px] flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-trash-can"></i> Delete
                                 </button>
@@ -6012,7 +5233,7 @@
                             ` : ``) : `
                         <!-- Actions Bar -->
                         ${isPreviewFromSave ? `
-                        <div class="flex items-center gap-2 mt-1">
+                        <div class="flex items-center gap-2 mt-1 preview-action-bar">
                             <button onclick="editFromPreview()" class="w-10 h-10 shrink-0 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm" title="Edit Record">
                                 <i class="fa-solid fa-pen-to-square text-sm"></i>
                             </button>
@@ -6030,7 +5251,7 @@
                              </button>
                          </div>
                          ` : `
-                         <div class="flex items-center gap-3 mt-1">
+                         <div class="flex items-center gap-3 mt-1 preview-action-bar">
                              <button onclick="editFromPreview()" class="premium-btn-green flex-1 !py-4 !rounded-[18px] active:scale-95 transition-all">
                                  <i class="fa-solid fa-pen-to-square"></i> Edit
                              </button>
@@ -6098,15 +5319,13 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-amber-500 transition-colors"></i>
                         </div>
 
-
-
                         <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-emerald-300 group">
                             <div class="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
-                                <i class="fa-solid fa-file-import text-xl"></i>
+                                <i class="fa-solid fa-file-export text-xl"></i>
                             </div>
                             <div class="flex-1">
-                                <h4 class="text-sm font-black text-slate-800">Import Data</h4>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upload student records from Excel</p>
+                                <h4 class="text-sm font-black text-slate-800">Export Data</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Download Data spreadsheet & Photos</p>
                             </div>
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-emerald-500 transition-colors"></i>
                         </div>
@@ -6123,18 +5342,7 @@
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-red-500 transition-colors"></i>
                         </div>
                         ` : ''}
-                        <div onclick="activateRecycleBinFilter()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-red-300 group">
-                            <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all shadow-sm">
-                                <i class="fa-solid fa-trash-can text-xl"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h4 class="text-sm font-black text-slate-800">Recycle Bin</h4>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">View deleted records</p>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-red-500 transition-colors"></i>
-                        </div>
 
-                        
 
                         <!-- Added Logout Button -->
                         <div onclick="logoutUser()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-rose-300 group">
@@ -6147,61 +5355,6 @@
                             </div>
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-rose-500 transition-colors"></i>
                         </div>
-
-                        <!-- Developer Contact Info Card -->
-                        <div class="system-card p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
-                            <div class="flex items-center gap-3">
-                                <button type="button" onclick="openDevPhoto()" class="w-10 h-10 rounded-xl overflow-hidden bg-indigo-50 flex items-center justify-center border border-slate-200 shrink-0 transition-all hover:scale-105 active:scale-95" aria-label="Open developer photo">
-                                    <img src="Adminphoto .jpeg" alt="Admin Photo" class="w-full h-full object-cover">
-                                </button>
-                                <div>
-                                    <h4 class="text-sm font-normal">
-                                        <span class="text-emerald-600">IDentify</span>
-                                        <span class="text-slate-800"> By </span>
-                                        <span class="text-slate-800">Javed Ansari</span>
-                                    </h4>
-                                    <p class="text-[9px] font-bold text-slate-450 uppercase tracking-widest">Contact Info</p>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-[auto_max-content_auto_1fr] gap-x-2 gap-y-2 text-xs text-slate-600 pt-1 font-semibold pl-1 items-start">
-                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-phone"></i></div>
-                                <div>Mobile No</div>
-                                <div>:</div>
-                                <div><a href="tel:7999565002" class="text-indigo-600 hover:underline">7999565002</a></div>
-                                
-                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-envelope"></i></div>
-                                <div>Email ID</div>
-                                <div>:</div>
-                                <div class="break-all"><a href="mailto:Identify.jvd@gmail.com" class="text-indigo-600 hover:underline">Identify.jvd@gmail.com</a></div>
-                                
-                                <div class="mt-[2px] text-slate-400 flex justify-center w-[14px]"><i class="fa-solid fa-location-dot"></i></div>
-                                <div>Address</div>
-                                <div>:</div>
-                                <div class="leading-relaxed">
-                                    ${schoolConfig.address ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(schoolConfig.address)}" target="_blank" class="text-indigo-600 hover:underline">${sanitizeHTML(schoolConfig.address)}</a>` : '<span class="text-slate-500">Address not set</span>'}
-                                </div>
-                            </div>
-                            <div class="pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center justify-center">
-                                <a href="tel:${schoolConfig.mobile || '7999565002'}" class="w-9 h-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center hover:bg-slate-200 transition-all" title="Call">
-                                    <i class="fa-solid fa-phone"></i>
-                                </a>
-                                <a href="${schoolConfig.whatsapp || (schoolConfig.mobile ? `https://wa.me/${String(schoolConfig.mobile).replace(/\D/g,'')}` : 'https://wa.me/') }" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center hover:bg-green-200 transition-all" title="WhatsApp">
-                                    <i class="fa-brands fa-whatsapp"></i>
-                                </a>
-                                <a href="mailto:${schoolConfig.email || 'Identify.jvd@gmail.com'}" class="w-9 h-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center hover:bg-slate-200 transition-all" title="Email">
-                                    <i class="fa-solid fa-envelope"></i>
-                                </a>
-                                <a href="${schoolConfig.youtube || 'https://www.youtube.com/'}" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center hover:bg-red-200 transition-all" title="YouTube">
-                                    <i class="fa-brands fa-youtube"></i>
-                                </a>
-                                <a href="${schoolConfig.instagram || 'https://www.instagram.com/'}" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center hover:bg-pink-200 transition-all" title="Instagram">
-                                    <i class="fa-brands fa-instagram"></i>
-                                </a>
-                                <a href="${schoolConfig.facebook || 'https://www.facebook.com/'}" target="_blank" rel="noopener noreferrer" class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center hover:bg-blue-200 transition-all" title="Facebook">
-                                    <i class="fa-brands fa-facebook-f"></i>
-                                </a>
-                            </div>
-                        </div>
                     </div>
                 </div>`;
                         const countEl = document.getElementById('showing-count');
@@ -6212,10 +5365,13 @@
                         return;
                     }
 
-                    if (blankRecordMode === 'recycleBin') {
-                        t.innerHTML = buildRecycleBinHtml();
+                    if (blankRecordMode === 'schoolActivity') {
+                        t.innerHTML = buildSchoolActivityHtml();
+                        const countEl = document.getElementById('showing-count');
+                        const infoEl = document.getElementById('records-page-info');
+                        if (countEl) countEl.innerText = 'Logs';
+                        if (infoEl) infoEl.innerText = 'Live Feed';
                         lucide.createIcons();
-                        renderRecycleBin();
                         return;
                     }
 
@@ -6272,13 +5428,10 @@
                                     </div>
                                     
                                     <div>
-                                        <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-circle-info"></i> System About (Admin)</label>
-                                        <textarea id="manage-system-about" rows="3" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Enter system/about text for admin footer">${schoolConfig.systemAbout || schoolConfig.about || ''}</textarea>
-                                    </div>
-                                    <div>
                                         <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-map-location-dot"></i> Address</label>
                                         <input type="text" id="manage-school-address" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Full address" value="${schoolConfig.address || ''}">
                                     </div>
+                                    
                                     <div>
                                         <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-user-tie"></i> Contact Person</label>
                                         <input type="text" id="manage-school-contact" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="Name" value="${schoolConfig.contactPerson || ''}">
@@ -6295,43 +5448,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-whatsapp"></i> WhatsApp Link</label>
-                                            <input type="text" id="manage-school-whatsapp" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="https://wa.me/1234567890" value="${schoolConfig.whatsapp || ''}">
-                                        </div>
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-instagram"></i> Instagram Link</label>
-                                            <input type="text" id="manage-school-instagram" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="https://www.instagram.com/username" value="${schoolConfig.instagram || ''}">
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-3 mt-3">
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-youtube"></i> YouTube Link</label>
-                                            <input type="text" id="manage-school-youtube" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="https://www.youtube.com/channel/..." value="${schoolConfig.youtube || ''}">
-                                        </div>
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-brands fa-facebook-f"></i> Facebook Link</label>
-                                            <input type="text" id="manage-school-facebook" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 transition" placeholder="https://www.facebook.com/username" value="${schoolConfig.facebook || ''}">
-                                        </div>
-                                    </div>
-
                                     <div class="border-t border-slate-100 my-4"></div>
-                                    <h4 class="text-[11px] font-black text-slate-800 uppercase tracking-widest mb-2"><i class="fa-solid fa-lock text-slate-400 mr-1"></i> Login Credentials</h4>
-
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-user-lock"></i> User ID</label>
-                                            <input type="text" id="new-school-id" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition" placeholder="User ID" value="${schoolConfig.loginId || ''}">
-                                        </div>
-                                        <div class="relative">
-                                            <label class="premium-label !text-[11px] !tracking-widest uppercase"><i class="fa-solid fa-key"></i> Password</label>
-                                            <input type="password" id="new-school-pass" class="w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition pr-10" placeholder="New Password (min 6 chars)" value="${schoolConfig.loginEnc ? decryptLocal(schoolConfig.loginEnc) : (schoolConfig.loginPassword || '')}">
-                                            <button type="button" onclick="toggleManagePassword()" class="absolute right-3 top-[34px] text-slate-400 hover:text-purple-600 transition">
-                                                <i id="manage-pass-icon" class="fa-solid fa-eye text-sm"></i>
-                                            </button>
-                                        </div>
-                                    </div>
                                     
                                     <div id="school-create-msg" class="hidden text-sm font-bold rounded-xl px-4 py-2 mt-2"></div>
                                     
@@ -6570,19 +5687,17 @@
                             const pWidth = pMeta.width || 600;
                             const pHeight = pMeta.height || 800;
                             return `
-                        <div class="premium-photo-frame relative" onclick="handleFrameClick(event)" style="aspect-ratio: ${pWidth} / ${pHeight};">
+                        <div class="premium-photo-frame" onclick="handleFrameClick(event)" style="aspect-ratio: ${pWidth} / ${pHeight};">
                             <img id="blank-photo-preview-img" src="${photoSrc}" class="${isPhotoPresent ? '' : 'hidden'} w-full h-full object-cover">
                             <div id="blank-photo-placeholder" class="flex items-center justify-center h-full w-full" style="${isPhotoPresent ? 'display:none' : ''}">
                                 <i class="fa-solid fa-user-tie text-[#05996c] text-[150px]"></i>
                             </div>
-                            ${isPhotoPresent ? `
-                            <button type="button" id="blank-crop-photo-btn" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-blue-600" title="Crop Photo">
-                                <i class="fa-solid fa-crop-simple text-[11px]"></i>
+                            <button id="blank-crop-photo-btn" type="button" onclick="event.stopPropagation(); openCropModal();" class="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
+                                <i class="fa-solid fa-crop-simple"></i>
                             </button>
-                            <button type="button" id="blank-remove-photo-btn" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform hover:bg-rose-600" title="Delete Photo">
-                                <i class="fa-solid fa-xmark text-[12px]"></i>
+                            <button id="blank-remove-photo-btn" type="button" onclick="event.stopPropagation(); removePhoto();" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform" style="${isPhotoPresent ? '' : 'display:none'}">
+                                <i class="fa-solid fa-xmark"></i>
                             </button>
-                            ` : ''}
                         </div>`;
                         })() : ''}
                         
@@ -6643,12 +5758,10 @@
                     return;
                 }
                 const pageItems = currentRenderedRecords.slice(0, currentRenderLimit);
-
                 if (pageItems.length === 0) {
                     t.innerHTML = '<div class="p-10 text-center text-slate-400 text-sm">No records found</div>';
                     return;
                 }
-
                 t.innerHTML = generateRecordsHtml(pageItems);
 
                 if (currentRenderLimit < currentRenderedRecords.length) {
@@ -6688,46 +5801,7 @@
                     }
 
                     // Records list - split click zones
-                    if (activeStatusFilter === 'recycleBin') {
-                        html += `
-            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition hover:bg-slate-50/50">
-                <div class="flex flex-1 items-stretch min-w-0">
-                    <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
-                        ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
-                    </div>
-                    <div class="flex-1 px-4 flex flex-col justify-center min-w-0">
-                        <div class="font-extrabold text-[15px] text-emerald-700 truncate whitespace-nowrap">${sanitizeHTML(x.studentName || 'Unnamed')}</div>
-                        <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
-                    </div>
-                </div>
-                <div class="px-4 flex items-center justify-end gap-3 min-w-[120px] record-selection-zone" data-id="${x.id}" data-hasdoc="${hasDoc}">
-                    <div class="flex flex-col items-end justify-center gap-0.5 mr-1">
-                        <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
-                        <div class="flex items-center gap-1 opacity-60">
-                            
-                            ${syncIconStatusHtml}
-                            ${isRecVerified ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">verified</span>' : ''}
-                            ${isRecVerified ? '' : (hasDoc ? '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">unpublished</span>' : '<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: \'FILL\' 1;">no_photography</span>')}
-                        </div>
-                    </div>
-                    ${(selectedRecords.size > 0) ? `
-                        <div class="bulk-cb w-[18px] h-[18px] rounded-md border-2 ${selectedRecords.has(String(x.id)) ? 'bg-emerald-600 border-emerald-600' : 'bg-white border-slate-300'} flex items-center justify-center transition-all" data-id="${x.id}">
-                            <i class="${selectedRecords.has(String(x.id)) ? 'fa-solid fa-check text-[10px] text-white' : ''}"></i>
-                        </div>
-                    ` : `
-                        <div class="flex items-center gap-2">
-                            <button onclick="event.stopPropagation(); restoreRecord('${x.id}')" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Restore">
-                                <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">settings_backup_restore</span>
-                            </button>
-                            <button onclick="binLpClick('${x.id}', event)" class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm" title="Delete Permanently">
-                                <i class="fa-solid fa-trash-can text-[14px]"></i>
-                            </button>
-                        </div>
-                    `}
-                </div>
-            </div>`;
-                    } else {
-                        html += `
+                    html += `
             <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40">
                 <!-- Data & Photo View: Preview Zone -->
                 <div class="flex flex-1 items-stretch min-w-0 record-preview-zone" data-id="${x.id}" data-hasdoc="${!hasDoc}">
@@ -6759,7 +5833,6 @@
                     </div>
                 </div>
             </div>`;
-                    }
                 });
                 return html;
             }
@@ -6793,11 +5866,7 @@
                     setupLazyLoadObserver();
                 }
                 lucide.createIcons();
-            }
-
-
-
-            function setChipFilter(type, value) {
+            }            function setChipFilter(type, value) {
                 if (type === 'status') {
                     activeStatusFilter = value;
                     if (value === 'all') {
@@ -6808,8 +5877,6 @@
                         showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">unpublished</span> Unverified Selected');
                     } else if (value === 'pending') {
                         showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">no_photography</span> No Photos Selected');
-                    } else if (value === 'recycleBin') {
-                        showToast('<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">delete</span> Recycle Bin Selected');
                     }
                 } else if (type === 'class') {
                     activeClassFilter = (value === 'All Data' || value === 'All Class') ? 'all' : value;
@@ -6828,13 +5895,11 @@
                 const penBtn = document.getElementById('btn-pending');
                 const compBtn = document.getElementById('btn-completed'); // assuming this ID exists
                 const clsBtn = document.getElementById('filterClassBtn');
-                const binBtn = document.getElementById('btn-recycle-bin');
 
                 if (verBtn) verBtn.classList.toggle('active', activeStatusFilter === 'verified');
                 if (unverBtn) unverBtn.classList.toggle('active', activeStatusFilter === 'unverified');
                 if (penBtn) penBtn.classList.toggle('active', activeStatusFilter === 'pending');
                 if (allBtn) allBtn.classList.toggle('active', activeStatusFilter === 'all');
-                if (binBtn) binBtn.classList.toggle('active', activeStatusFilter === 'recycleBin');
 
                 // Sync Home chip UI
                 const hAll = document.getElementById('home-btn-all');
@@ -6863,7 +5928,7 @@
                 const baseDb = activeClassFilter === 'all' ? db : db.filter(x => x.sclass === activeClassFilter);
                 const filteredDb = baseDb.filter(x => !(x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true'));
                 const total = filteredDb.length;
-                const binTotal = baseDb.filter(x => x.isDeleted === true || String(x.isDeleted).toLowerCase() === 'true').length;
+                const binTotal = (bin && bin.length) || 0;
 
                 let verifiedCount = 0;
                 let unverifiedCount = 0;
@@ -6919,7 +5984,6 @@
                     updateEl('btn-verified', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">verified</span> (${verifiedCount})`);
                     updateEl('btn-unverified', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">unpublished</span> (${unverifiedCount})`);
                     updateEl('btn-pending', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">no_photography</span> (${pendingCount})`);
-                    updateEl('btn-recycle-bin', `<span class="material-symbols-outlined text-[16px] -mt-0.5" style="font-variation-settings: 'FILL' 1;">delete</span> (${binTotal})`);
 
                     // Home Tab Buttons
                     updateEl('home-btn-all', `All Data (${total})`);
@@ -6934,7 +5998,7 @@
                 const binBadge = document.getElementById('bin-count-text');
                 if (binBadge) binBadge.innerText = binTotal;
             }
-            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRenderLimit = 30; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); persistLocalUnverified(); }
+            function renderRecords(d) { currentRenderedRecords = getSortedRecords(d); currentRenderLimit = 30; renderCurrentRecordsPage(); maybeFlushPendingHighlight(); syncChipCounts(); }
             window.addEventListener('storage', (event) => {
                 if (event.key === RECORD_UPDATES_KEY) refreshDatabaseAfterCertificateUpdate();
                 if (event.key && event.key.startsWith('identify_fb_')) {
@@ -7226,8 +6290,6 @@
                 document.getElementById('custom-modal').classList.add('hidden');
                 const progressWrap = document.getElementById('modal-progress-wrap');
                 if (progressWrap) progressWrap.classList.add('hidden');
-                const closeIcon = document.getElementById('modal-close-icon');
-                if (closeIcon) closeIcon.classList.add('hidden');
                 setTimeout(() => maybeFlushPendingHighlight(), 80);
             }
             function confirmReset() { showModal('confirm', 'Reset Form?', 'All entered data will be lost. Are you sure?', () => resetForm(), 'Yes, Reset'); }
@@ -7283,17 +6345,16 @@
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
-                        db.forEach(r => {
-                            if (r.id && !r.id.startsWith('draft_') && r.sn && Number(r.sn) < 1000000000 && Number(r.sn) > localMaxSn) {
-                                localMaxSn = Number(r.sn);
-                            }
-                        });
+                        db.forEach(x => { if (x.id && !x.id.startsWith('draft_') && x.sn && Number(x.sn) < 1000000000 && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
+                        const savedSn = parseInt(localStorage.getItem(SN_KEY)) || 0;
+                        if (savedSn > localMaxSn) localMaxSn = savedSn;
                         
                         let nextSn;
                         try {
                             nextSn = await new Promise((resolve, reject) => {
                                 serverCall('generateId', [localMaxSn], resolve, reject);
                             });
+                            try { localStorage.setItem(SN_KEY, nextSn); } catch(e){}
                         } catch(e) {
                             console.error('Background ID generation failed:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
@@ -7308,7 +6369,7 @@
                             showToast("Network Error: ID Generation Failed. Saved as Draft.", "error");
                             return;
                         }
-                        
+
                         const paddedSn = String(nextSn).padStart(3, '0');
                         const generatedId = `${schoolCode}${year}${paddedSn}`;
                         
@@ -7332,19 +6393,13 @@
                             _pending: true
                         };
                     } else {
-                        const existingIdx = db.findIndex(x => x.id === finalRec.id);
-                        if (existingIdx !== -1) {
-                            db[existingIdx] = { ...db[existingIdx], verified: true, verifiedBy: getCurrentUserName(), verifiedAt: getFormattedTimestamp(nowTs), draftStatus: '', _syncStatus: 'syncing', _pending: true };
-                            finalRec = db[existingIdx];
-                        } else {
-                            finalRec.verified = true;
-                            finalRec.verifiedBy = getCurrentUserName();
-                            finalRec.verifiedAt = getFormattedTimestamp(nowTs);
-                            finalRec.draftStatus = '';
-                            finalRec._syncStatus = 'syncing';
-                            finalRec._pending = true;
-                            db.unshift(finalRec);
-                        }
+                        finalRec.verified = true;
+                        finalRec.verifiedBy = getCurrentUserName();
+                        finalRec.verifiedAt = getFormattedTimestamp(nowTs);
+                        finalRec.draftStatus = '';
+                        finalRec._syncStatus = 'syncing';
+                        finalRec._pending = true;
+                        db.unshift(finalRec);
                     }
                     renderCurrentRecordsPage();
 
@@ -7365,7 +6420,6 @@
             // Verify current previewRecord and move to next pending
             async function verifyAndGoNext() {
                 if (isActionPending) return;
-                commitUnsavedPreviewRecord();
                 if (!previewRecord || !previewRecord.id) return;
                 isActionPending = true;
                 const localRec = { ...previewRecord };
@@ -7404,17 +6458,16 @@
                         const year = new Date().getFullYear().toString().slice(-2);
                         
                         let localMaxSn = 0;
-                        db.forEach(r => {
-                            if (r.id && !r.id.startsWith('draft_') && r.sn && Number(r.sn) < 1000000000 && Number(r.sn) > localMaxSn) {
-                                localMaxSn = Number(r.sn);
-                            }
-                        });
+                        db.forEach(x => { if (x.id && !x.id.startsWith('draft_') && x.sn && Number(x.sn) < 1000000000 && Number(x.sn) > localMaxSn) localMaxSn = Number(x.sn); });
+                        const savedSn = parseInt(localStorage.getItem(SN_KEY)) || 0;
+                        if (savedSn > localMaxSn) localMaxSn = savedSn;
                         
                         let nextSn;
                         try {
                             nextSn = await new Promise((resolve, reject) => {
                                 serverCall('generateId', [localMaxSn], resolve, reject);
                             });
+                            try { localStorage.setItem(SN_KEY, nextSn); } catch(e){}
                         } catch(e) {
                             console.error('Background ID generation failed in verifyAndGoNext:', e);
                             const idxInDb = db.findIndex(x => x.id === localRec.id);
@@ -7489,37 +6542,7 @@
                 }
             }
 
-            function commitUnsavedPreviewRecord() {
-                if (!previewRecord || !previewRecord._isUnsaved) return;
-                previewRecord._isUnsaved = false;
-                
-                const localRec = { ...previewRecord };
-                delete localRec._displayPhotoSrc;
-                delete localRec._isUnsaved;
-                
-                localRec.createdAt = localRec.createdAt || Date.now();
-                localRec.updatedAt = Date.now();
-                localRec._pending = true;
-                localRec._syncStatus = 'pending';
-                
-                try {
-                    idbPut(IDB_STORE_RECORDS, { ...localRec }).catch(() => { });
-                    if (localRec.photoData && localRec.photoData.startsWith('data:image')) {
-                        const blob = dataUrlToBlob(localRec.photoData);
-                        if (blob) {
-                            const attachId = `${localRec.id}::photo`;
-                            idbPut(IDB_STORE_ATTACH, { id: attachId, blob: blob, savedAt: Date.now() }).catch(() => { });
-                        }
-                    }
-                } catch (e) { console.warn('IDB persist failed', e); }
-                
-                addActivity(previewRecord._eid ? 'UPDATE' : 'ADD', localRec);
-                if (!previewRecord._eid) clearDraft();
-                storeRecordInDb(localRec);
-            }
-
             function saveAndNew(skipServerFinalize = false) {
-                commitUnsavedPreviewRecord();
                 const studentName = (previewRecord && previewRecord.studentName) ? previewRecord.studentName.trim() : 'Student';
                 const firstName = studentName.split(' ')[0];
                 const isVerified = previewRecord && previewRecord.verified && String(previewRecord.verified).toLowerCase() !== 'false';
@@ -7527,15 +6550,13 @@
 
                 // Background Finalization
                 if (!skipServerFinalize && previewRecord && previewRecord.id) {
-                    if (isVerified) {
-                        setSyncStatus('Saving ' + firstName + '...', 40);
-                        const finalRec = { ...previewRecord };
-                        serverCallSilent('updateRecord', [finalRec], (res) => {
-                            setSyncStatus(firstName + ' Saved!', 100);
-                            setTimeout(() => setSyncStatus(''), 2000);
-                            loadAllData(() => { filterRecords(); renderHomeAnalysis(); });
-                        });
-                    }
+                    setSyncStatus('Saving ' + firstName + '...', 40);
+                    const finalRec = { ...previewRecord };
+                    serverCallSilent('updateRecord', [finalRec], (res) => {
+                        setSyncStatus(firstName + ' Saved!', 100);
+                        setTimeout(() => setSyncStatus(''), 2000);
+                        loadAllData(() => { filterRecords(); renderHomeAnalysis(); });
+                    });
                     draftServerRecordId = '';
                 }
 
@@ -7610,14 +6631,11 @@
                         }
                     }
 
-                    const rec = findRecordById(db, id);
-                    if(rec) {
-                        rec.isDeleted = true;
-                        rec.deletedAt = new Date().toISOString();
-                        storeRecordInDb(rec);
-                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, rec).catch(()=>{}); } catch(e){}
-                        serverCallSilent('updateRecord', [rec], ()=>{}, ()=>{});
-                    }
+                    registerLocalDeletion(id);
+                    db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
+                    if (typeof window.queueServerDraftSync === 'function') window.queueServerDraftSync();
+                    try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
+                    serverCallSilent('deleteRecord', [id], ()=>{}, ()=>{});
                     showToast('Record removed successfully');
 
                     renderHomeAnalysis();
@@ -7704,7 +6722,7 @@
                 _lpTimer = setTimeout(() => {
                     _lpDidTrigger = true;
                     if (navigator.vibrate) navigator.vibrate(50);
-                    if (activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all'))) {
+                    if (activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all'))) {
                         toggleRecordSelection(id, null);
                     }
                 }, 500); // 500ms long press
@@ -7720,7 +6738,7 @@
                     _lpDidTrigger = false;
                     return;
                 }
-                if ((activeStatusFilter === 'recycleBin' || activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all'))) && selectedRecords.size > 0) {
+                if ((activeStatusFilter === 'unverified' || activeStatusFilter === 'pending' || (currentUser && currentUser.userId === 'admin' && (activeStatusFilter === 'verified' || activeStatusFilter === 'all'))) && selectedRecords.size > 0) {
                     toggleRecordSelection(id, null);
                 } else {
                     openStudentDetailPopup(id, false, !hasDoc);
@@ -7728,13 +6746,67 @@
             }
 
             let _previewTouchStartX = 0;
+            let _previewLpTimer = null;
+            let _previewLpDidTrigger = false;
+
+            function downloadPreviewCardAsJpg() {
+                const card = document.querySelector('.preview-dark-card');
+                if (!card) return;
+                
+                showToast("Generating JPG...");
+                if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                
+                // Hide the navigation buttons temporarily so they don't appear in the image
+                const navButtons = document.querySelectorAll('.fixed.top-\\[100px\\]');
+                navButtons.forEach(btn => btn.style.display = 'none');
+                
+                // Hide the preview action buttons
+                const actionBars = document.querySelectorAll('.preview-action-bar');
+                actionBars.forEach(bar => bar.style.display = 'none');
+                
+                html2canvas(card, {
+                    scale: 2, // High resolution
+                    useCORS: true,
+                    backgroundColor: '#1e293b' // match dark card background
+                }).then(canvas => {
+                    navButtons.forEach(btn => btn.style.display = '');
+                    actionBars.forEach(bar => bar.style.display = '');
+                    
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    const link = document.createElement('a');
+                    link.href = imgData;
+                    const sn = previewRecord ? previewRecord.sn : 'Unknown';
+                    link.download = `ID_Card_${sn}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast("Downloaded Successfully!");
+                }).catch(err => {
+                    navButtons.forEach(btn => btn.style.display = '');
+                    actionBars.forEach(bar => bar.style.display = '');
+                    console.error(err);
+                    showToast("Error generating JPG");
+                });
+            }
+
             function handlePreviewTouchStart(e) {
+                _previewLpDidTrigger = false;
                 if (e.changedTouches && e.changedTouches.length > 0) {
                     _previewTouchStartX = e.changedTouches[0].screenX;
+                } else if (e.screenX) {
+                    _previewTouchStartX = e.screenX; // For mouse
                 }
+                
+                _previewLpTimer = setTimeout(() => {
+                    _previewLpDidTrigger = true;
+                    downloadPreviewCardAsJpg();
+                }, 700); // 700ms long press
             }
 
             function handlePreviewTouchEnd(e) {
+                if (_previewLpTimer) clearTimeout(_previewLpTimer);
+                if (_previewLpDidTrigger) return;
+                
                 if (e.changedTouches && e.changedTouches.length > 0) {
                     let touchEndX = e.changedTouches[0].screenX;
                     let diff = touchEndX - _previewTouchStartX;
@@ -7747,7 +6819,19 @@
                         if (navigator.vibrate) navigator.vibrate(15);
                         openNextPreview();
                     }
+                } else if (e.screenX) {
+                    let mouseEndX = e.screenX;
+                    let diff = mouseEndX - _previewTouchStartX;
+                    if (diff > 60) {
+                        openPrevPreview();
+                    } else if (diff < -60) {
+                        openNextPreview();
+                    }
                 }
+            }
+
+            function handlePreviewTouchCancel(e) {
+                if (_previewLpTimer) clearTimeout(_previewLpTimer);
             }
 
             let _homeTouchStartX = 0;
@@ -7792,15 +6876,7 @@
                 }
             }, { passive: true });
             function handleHomeSwipe(direction) {
-                const statuses = ['all', 'verified', 'unverified', 'pending'];
-                let currentIndex = statuses.indexOf(activeStatusFilter);
-                if (direction === 'left') {
-                    currentIndex = (currentIndex + 1) % statuses.length;
-                } else {
-                    currentIndex = (currentIndex - 1 + statuses.length) % statuses.length;
-                }
-                if (navigator.vibrate) navigator.vibrate(15);
-                setChipFilter('status', statuses[currentIndex]);
+                // Swipe disabled in Admin Panel
             }
 
             // --- STUDENT DETAIL POPUP (HOME PAGE ROW TAP) ---
@@ -7813,7 +6889,6 @@
                 }
                 // Redirect to Premium Preview Page instead of showing a popup
                 previewRecord = rec;
-                previewRecord._isEditingMode = isPendingContext || isSavePreview;
                 if (currentTab !== 'records') {
                     showTab('records');
                 }
@@ -7912,2073 +6987,4 @@
             } else {
                 init();
             }
-        </script>
-
-
-
-    <div id="account-modal"
-            class="absolute inset-0 z-[10900] hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div class="popup-card rounded-3xl p-6 max-w-md w-full shadow-2xl">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
-                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="user-cog"
-                            class="w-5 h-5 text-emerald-600"></i> Update Login</h3>
-                    <button onclick="closeAccountModal()" class="popup-close p-2 rounded-full transition"><i
-                            data-lucide="x"></i></button>
-                </div>
-                <div class="space-y-3">
-                    <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                        Logged in as: <span id="account-current-user" class="font-black"></span>
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase text-emerald-700 mb-1">Current
-                            Password</label>
-                        <input id="account-current-password" type="password"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500"
-                            placeholder="Current password">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase text-emerald-700 mb-1">New User ID</label>
-                        <input id="account-new-user-id" type="text"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500"
-                            placeholder="New user id">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase text-emerald-700 mb-1">New Password</label>
-                        <input id="account-new-password" type="password"
-                            class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500"
-                            placeholder="New password">
-                    </div>
-                </div>
-                <div class="mt-5 flex gap-3">
-                    <button type="button" onclick="closeAccountModal()"
-                        class="flex-1 py-3 bg-slate-200 text-slate-800 rounded-xl font-bold flex items-center justify-center gap-2"><i
-                            data-lucide="arrow-left" class="w-4 h-4"></i> Back</button>
-                    <button type="button" onclick="saveAccountCredentials()"
-                        class="flex-1 py-3 bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"><i
-                            data-lucide="save" class="w-4 h-4"></i> Update</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="custom-modal"
-            class="absolute inset-0 z-[9999] hidden flex items-center justify-center p-4 modal-bg bg-black/50 backdrop-blur-sm">
-            <div class="popup-card rounded-3xl p-8 max-sm w-full shadow-2xl transform transition-all scale-100 relative">
-                <button id="modal-close-icon" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 hidden transition-colors" onclick="closeModal()">
-                    <i class="fa-solid fa-xmark text-2xl"></i>
-                </button>
-                <div id="modal-icon" class="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"></div>
-                <div id="modal-subtitle" class="hidden text-emerald-600 font-extrabold text-base text-center mb-1"></div>
-                <h3 id="modal-title" class="text-xl font-bold text-center mb-2"></h3>
-                <p id="modal-msg" class="text-slate-500 text-center text-sm mb-6"></p>
-                <div id="modal-progress-wrap" class="hidden mb-6">
-                    <div class="h-2 overflow-hidden rounded-full bg-emerald-100">
-                        <div id="modal-progress-bar"
-                            class="h-full rounded-full bg-emerald-500 transition-all duration-300" style="width: 0%">
-                        </div>
-                    </div>
-                    <div id="modal-progress-text" class="mt-2 text-center text-xs font-semibold text-emerald-700">0%
-                    </div>
-                </div>
-                <div id="modal-actions" class="flex gap-3 mt-4"></div>
-            </div>
-        </div>
-
-        <div id="status-card"
-            class="absolute top-5 left-5 right-5 z-[10000] hidden rounded-2xl border border-emerald-100 bg-white/95 shadow-2xl backdrop-blur-sm overflow-hidden">
-            <div id="status-progress-bar" class="h-1.5 w-full bg-emerald-500 transition-all duration-300"
-                style="width: 18%"></div>
-            <div class="p-4">
-                <div class="flex items-start gap-3">
-                    <div id="status-icon"
-                        class="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div id="status-title" class="text-sm font-extrabold text-slate-800">Working</div>
-                        <div id="status-message" class="mt-1 text-xs leading-5 text-slate-500">Please wait...</div>
-                    </div>
-                    <button id="status-close-btn" type="button"
-                        class="hidden rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div id="activity-modal"
-            class="absolute inset-0 z-[9990] hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div class="popup-card rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col max-h-[80vh]">
-                <div class="flex justify-between items-center mb-4 border-b pb-4">
-                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="activity"
-                            class="text-emerald-600"></i> Activity</h3>
-                    <button onclick="document.getElementById('activity-modal').classList.add('hidden')"
-                        class="popup-close p-2 rounded-full transition"><i data-lucide="x"></i></button>
-                </div>
-                <div class="text-xs text-slate-400 mb-2 italic">Add / Update / Delete records history</div>
-                <div id="activity-content" class="flex-1 overflow-y-auto custom-scroll system-scroll space-y-2 p-1">
-                </div>
-                <div class="mt-4 text-center">
-                    <button onclick="clearActivity()" class="text-xs text-rose-500 hover:underline">Clear
-                        Activity</button>
-                </div>
-            </div>
-        </div>
-
-
-
-        <div id="camera-modal" class="absolute inset-0 z-[100] bg-slate-900/90 hidden items-center justify-center p-4">
-            <div class="bg-white rounded-2xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl">
-                <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
-                    <h3 class="font-bold text-slate-700">Capture</h3>
-                    <button onclick="closeCameraModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"
-                            class="w-5 h-5"></i></button>
-                </div>
-                <div class="w-full aspect-square bg-black relative flex items-center justify-center overflow-hidden">
-                    <video id="camera-video" class="w-full h-full object-cover" autoplay playsinline></video>
-                    <div id="camera-guides"
-                        class="absolute inset-0 pointer-events-none flex items-center justify-center opacity-40">
-                        <div class="w-48 h-56 border-2 border-dashed border-white rounded-full"></div>
-                    </div>
-                </div>
-                <div class="p-6 bg-slate-50 flex justify-center gap-4">
-                    <button id="capture-btn"
-                        class="w-16 h-16 bg-white border-4 border-emerald-500 rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-50 transition"
-                        onclick="takeSnapshot()">
-                        <i data-lucide="camera" class="w-6 h-6 text-emerald-600 pointer-events-none"></i>
-                    </button>
-                </div>
-                <canvas id="camera-canvas" class="hidden"></canvas>
-            </div>
-        </div>
-
-        <!-- Student Detail Popup (Home Page Row Tap) -->
-        <div id="student-detail-popup"
-            class="absolute inset-0 z-[10800] hidden items-center justify-center p-5 bg-black/50 backdrop-blur-sm">
-            <div class="sdp-card system-card-soft rounded-[36px] w-full max-w-[360px] overflow-hidden flex flex-col"
-                style="max-height: min(90dvh, 640px);">
-                <!-- Header -->
-                <div class="flex items-center justify-between px-6 pt-5 pb-3 shrink-0 border-b border-slate-50">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                            <i class="fa-solid fa-id-card text-emerald-600 text-sm"></i>
-                        </div>
-                        <span class="text-[13px] font-black text-slate-700 uppercase tracking-wider">Student Info</span>
-                    </div>
-                    <button onclick="closeStudentDetailPopup()"
-                        class="w-9 h-9 rounded-full bg-slate-100 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center text-slate-500 transition active:scale-90">
-                        <i class="fa-solid fa-xmark text-sm"></i>
-                    </button>
-                </div>
-                <!-- Scrollable content -->
-                <div id="student-detail-content"
-                    class="flex-1 overflow-y-auto custom-scroll system-scroll px-6 pt-3 pb-6">
-                    <!-- Filled by JS -->
-                </div>
-            </div>
-        </div>
-
-        <!-- School Config Overlay -->
-        <div id="school-config-overlay"
-            class="fixed inset-0 z-[11100] hidden items-center justify-center bg-black/60 backdrop-blur-md p-4">
-            <div
-                class="system-card-soft rounded-[40px] w-full max-w-[380px] overflow-hidden flex flex-col transform transition-all animate-in fade-in zoom-in duration-300 relative">
-                <button onclick="closeSchoolConfig()"
-                    class="absolute top-5 right-6 w-9 h-9 rounded-full bg-slate-100/50 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center text-slate-500 transition active:scale-90 z-20">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-                <div class="px-8 pt-10 pb-6 text-center">
-                    <div id="settings-logo-container"
-                        class="w-20 h-20 rounded-3xl bg-emerald-50 mx-auto flex items-center justify-center mb-4 border-2 border-emerald-100 overflow-hidden">
-                        <i class="fa-solid fa-school-flag text-4xl text-emerald-600"></i>
-                    </div>
-                    <h3 id="settings-school-name-display" class="text-xl font-black text-slate-800 mb-1">School Name
-                    </h3>
-                    <p id="settings-about-display" class="text-xs text-slate-400 font-bold uppercase tracking-widest">
-                        System About</p>
-                </div>
-
-                <div class="px-8 space-y-5 flex-1 overflow-y-auto custom-scroll system-scroll pb-10">
-
-
-
-                    <div class="hidden">
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase mb-1.5 ml-1">School
-                            Name</label>
-                        <input id="config-name" type="text"
-                            class="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 focus:border-emerald-500 outline-none transition"
-                            value="Delhi Public School">
-                    </div>
-                    <div class="hidden">
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase mb-1.5 ml-1">ID Code
-                            Prefix</label>
-                        <input id="config-code" type="text"
-                            class="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 focus:border-emerald-500 outline-none transition"
-                            value="DPS">
-                    </div>
-
-
-
-                    <div
-                        class="bg-emerald-50 rounded-3xl p-4 border border-emerald-100 flex flex-col items-center mt-4">
-                        <i class="fa-solid fa-image text-emerald-600 mb-2"></i>
-
-                    </div>
-                    <div onclick="openFormBuilder()"
-                        class="bg-blue-50 rounded-3xl p-4 border border-blue-100 flex flex-col items-center cursor-pointer hover:bg-blue-100 transition">
-                        <i class="fa-solid fa-shapes text-blue-600 mb-2"></i>
-                        <span class="text-[9px] font-black text-blue-800 uppercase">Form Builder</span>
-                    </div>
-
-                    <div onclick="syncToDrive()"
-                        class="bg-indigo-50 rounded-3xl p-4 border border-indigo-100 flex flex-col items-center cursor-pointer hover:bg-indigo-100 transition">
-                        <i class="fa-brands fa-google-drive text-indigo-600 mb-2"></i>
-                        <span class="text-[9px] font-black text-indigo-800 uppercase">Send to Drive</span>
-                    </div>
-
-                    <div onclick="closeSchoolConfig(); openImportExportModal();"
-                        class="bg-emerald-50 rounded-3xl p-4 border border-emerald-100 flex flex-col items-center cursor-pointer hover:bg-emerald-100 transition">
-                        <i class="fa-solid fa-file-import text-emerald-600 mb-2"></i>
-                        <span class="text-[9px] font-black text-emerald-800 uppercase">Import Data</span>
-                    </div>
-
-                    <div onclick="logoutUser()"
-                        class="bg-rose-50 rounded-3xl p-4 border border-rose-100 flex flex-col items-center cursor-pointer hover:bg-rose-500 group transition">
-                        <i class="fa-solid fa-right-from-bracket text-rose-500 group-hover:text-white transition mb-2"></i>
-                        <span class="text-[9px] font-black text-rose-500 uppercase group-hover:text-white transition">Exit System</span>
-                    </div>
-
-                </div>
-
-                <div class="p-6 bg-white border-t border-slate-50 flex gap-4">
-
-                    <button onclick="closeSchoolConfig()"
-                        class="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm active:scale-95 transition">CLOSE
-                        PANEL</button>
-                </div>
-            </div>
-        </div>
-    </div> <!-- End app-container -->
-
-    <!-- Form Builder Backdrops -->
-    <div id="fb_quickAddBackdrop" class="fb-modal-backdrop" onclick="fb_closeQuickAdd(event)">
-        <div class="fb-modal-card premium-form-card relative overflow-hidden" onclick="event.stopPropagation()">
-            <!-- Premium Decorative Card Graphics -->
-            <svg class="absolute top-[-30px] right-[-30px] w-36 h-36 opacity-[0.06] text-emerald-800 pointer-events-none z-0" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.3">
-                <circle cx="50" cy="50" r="10" />
-                <circle cx="50" cy="50" r="20" />
-                <circle cx="50" cy="50" r="30" />
-                <circle cx="50" cy="50" r="40" />
-                <line x1="0" y1="50" x2="100" y2="50" />
-                <line x1="50" y1="0" x2="50" y2="100" />
-            </svg>
-
-            <svg class="absolute bottom-[-20px] left-[-20px] w-32 h-24 opacity-[0.06] text-blue-600 pointer-events-none z-0" viewBox="0 0 100 50" fill="none" stroke="currentColor" stroke-width="0.3">
-                <path d="M0,25 C20,10 40,40 60,25 C80,10 100,25 100,25" />
-                <path d="M0,30 C20,15 40,45 60,30 C80,15 100,30 100,30" />
-            </svg>
-
-            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-transparent relative z-10">
-                <div>
-                    <div class="text-sm font-black text-slate-800 uppercase tracking-tight">Add New Field</div>
-                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Choose type & name</div>
-                </div>
-                <button onclick="fb_closeQuickAdd()"
-                    class="w-9 h-9 rounded-full bg-slate-100 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center text-slate-500 transition">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-5">
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Type</label>
-                    <select id="fb_quickAddType" class="app-input text-slate-700 font-bold"
-                        onchange="fb_toggleQuickAddOptions(this.value); fb_updateFieldNameSuggestions();">
-                        <option value="text">Text Field</option>
-                        <option value="number">Number / Mobile</option>
-                        <option value="date">Date</option>
-                        <option value="select">Dropdown</option>
-                        <option value="image">Capture</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Name</label>
-                    <input id="fb_quickAddLabel" type="text" class="app-input text-slate-700 font-bold"
-                        placeholder="Enter field name (e.g. Roll No)" list="fb_field_suggestions">
-                    <datalist id="fb_field_suggestions"></datalist>
-                </div>
-                <div id="fb_quickAddOptionsWrap" class="hidden">
-                    <div class="flex items-center justify-between mb-2">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase ml-1">Dropdown
-                            Options</label>
-                        <button onclick="fb_quickAddAddOption()"
-                            class="text-[10px] text-emerald-600 font-black uppercase tracking-widest">+ Add
-                            Option</button>
-                    </div>
-                    <div id="fb_quickAddOptionsList" class="space-y-2"></div>
-                </div>
-            </div>
-            <div class="p-6 bg-slate-50 border-t border-slate-100 flex gap-4">
-                <button onclick="fb_closeQuickAdd()"
-                    class="w-[120px] h-[48px] bg-white hover:bg-slate-100 active:scale-[0.98] transition-all text-slate-600 rounded-[18px] font-black text-[13px] flex items-center justify-center gap-2 border border-slate-200">
-                    <i class="fa-solid fa-arrow-left"></i> Cancel
-                </button>
-                <button onclick="fb_confirmQuickAdd()"
-                    class="flex-1 h-[48px] bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all text-white rounded-[18px] font-black text-[14px] flex items-center justify-center gap-3 shadow-sm focus:outline-none">
-                    <i class="fa-solid fa-plus text-sm"></i>
-                    <span>Create Field</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="fb_edit_backdrop" class="fb-modal-backdrop" style="align-items: center;" onclick="fb_closeEditor(event)">
-        <div class="fb-modal-card premium-form-card relative overflow-hidden" onclick="event.stopPropagation()">
-            <!-- Premium Decorative Card Graphics -->
-            <svg class="absolute top-[-30px] right-[-30px] w-36 h-36 opacity-[0.06] text-emerald-800 pointer-events-none z-0" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="0.3">
-                <circle cx="50" cy="50" r="10" />
-                <circle cx="50" cy="50" r="20" />
-                <circle cx="50" cy="50" r="30" />
-                <circle cx="50" cy="50" r="40" />
-                <line x1="0" y1="50" x2="100" y2="50" />
-                <line x1="50" y1="0" x2="50" y2="100" />
-            </svg>
-
-            <svg class="absolute bottom-[-20px] left-[-20px] w-32 h-24 opacity-[0.06] text-blue-600 pointer-events-none z-0" viewBox="0 0 100 50" fill="none" stroke="currentColor" stroke-width="0.3">
-                <path d="M0,25 C20,10 40,40 60,25 C80,10 100,25 100,25" />
-                <path d="M0,30 C20,15 40,45 60,30 C80,15 100,30 100,30" />
-            </svg>
-
-            <div class="p-6 border-b border-gray-50 flex items-center justify-between bg-transparent relative z-10">
-                <div>
-                    <div class="text-sm font-black text-slate-800 uppercase tracking-tight">Edit Field</div>
-                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Update configurations
-                    </div>
-                </div>
-                <button onclick="fb_closeEditor()"
-                    class="w-9 h-9 rounded-full bg-slate-100 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center text-slate-500 transition">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scroll" id="fb_edit_content"></div>
-            <div class="p-6 bg-slate-50">
-                <button onclick="fb_closeEditor()"
-                    class="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm active:scale-95 transition shadow-sm">DONE</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Portable Dropdown Menus (Fixed to body for maximum layer support) -->
-    <div id="filterSortMenu" class="filter-menu">
-        <div class="menu-item" onclick="setSort('recent')"><i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
-            Recently Added</div>
-        <div class="menu-item" onclick="setSort('a-z')"><i data-lucide="arrow-down-a-z"
-                class="w-3 h-3 text-slate-400"></i> A to Z</div>
-        <div class="menu-item" onclick="setSort('z-a')"><i data-lucide="arrow-up-a-z"
-                class="w-3 h-3 text-slate-400"></i> Z to A</div>
-    </div>
-
-    <div id="filterClassMenu" class="filter-menu">
-        <!-- Dynamically populated by populateFilters() -->
-    </div>
-
-    <script>
-        // Initialize customFieldsConfig at top level so all functions can access
-        const savedCfg = localStorage.getItem('identifyCustomFields');
-        let customFieldsConfig = { customField1: { active: false, label: 'Custom 1' }, customField2: { active: false, label: 'Custom 2' }, customField3: { active: false, label: 'Custom 3' }, customField4: { active: false, label: 'Custom 4' }, customField5: { active: false, label: 'Custom 5' } };
-        if (savedCfg) { try { customFieldsConfig = JSON.parse(savedCfg); } catch (e) { } }
-
-        function openFormBuilder() {
-            closeSchoolConfig();
-            if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
-            setBlankRecordMode('builder');
-        }
-
-        async function openManageSchools() {
-            closeSchoolConfig();
-            if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
-            
-            // Fetch the latest config from Firestore to make sure we show the current credentials
-            if (typeof fetchSystemConfigFromFirebase === 'function') {
-                try {
-                    await fetchSystemConfigFromFirebase();
-                } catch (e) {
-                    console.warn("Could not sync latest config before opening Manage School:", e);
-                }
-            }
-            
-            setBlankRecordMode('manage_school');
-        }
-
-        function openDataInformation() {
-            closeSchoolConfig();
-            if (typeof previousBlankRecordMode !== 'undefined') previousBlankRecordMode = 'settings';
-            setBlankRecordMode('dataInfo');
-        }
-
-        function openSettingsModal() {
-            const modal = document.createElement('div');
-            modal.id = 'settings-modal';
-            modal.className = 'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center';
-            let html = '<div class="bg-white rounded-2xl p-6 w-[90%] max-w-sm"><h2 class="text-lg font-bold text-slate-800 mb-4">Custom Fields Settings</h2>';
-            for (let i = 1; i <= 5; i++) {
-                const field = customFieldsConfig['customField' + i];
-                html += `<div class="mb-3 flex flex-col gap-1">
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" id="cfg-active-${i}" ${field.active ? 'checked' : ''} class="w-4 h-4 accent-emerald-600">
-                    <span class="text-xs font-bold text-slate-600 uppercase">Enable Field ${i}</span>
-                </div>
-                <input type="text" id="cfg-label-${i}" placeholder="Enter Label (e.g. Blood Group)" value="${field.label}" class="w-full text-sm border p-2 rounded-lg outline-none focus:border-emerald-500 bg-slate-50">
-            </div>`;
-            }
-            html += '<div class="flex justify-end gap-2 mt-4 pt-4 border-t"><button onclick="document.getElementById(\'settings-modal\').remove()" class="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg text-sm font-bold">Cancel</button><button onclick="saveSettings()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold">Save</button></div></div>';
-            modal.innerHTML = html;
-            document.body.appendChild(modal);
-        }
-        function saveSettings() {
-            for (let i = 1; i <= 5; i++) {
-                customFieldsConfig['customField' + i].active = document.getElementById('cfg-active-' + i).checked;
-                customFieldsConfig['customField' + i].label = document.getElementById('cfg-label-' + i).value || `Custom ${i}`;
-            }
-            localStorage.setItem('identifyCustomFields', JSON.stringify(customFieldsConfig));
-            document.getElementById('settings-modal').remove();
-            showToast('Settings Saved');
-        }
-
-        // Toast notification for non-blocking feedback
-        function showToast(message, duration = 2200) {
-            // Do not sync toast messages to footer notifications anymore
-
-            let toast = document.getElementById('_global_toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = '_global_toast';
-                // Button-like Toast Styling (Green Variation, No Glow)
-                toast.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%) scale(0.85) translateY(-20px);background:#059669;color:#ffffff;height:36px;padding:0 24px;border-radius:999px;font-size:14.5px;font-weight:700;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.15);opacity:0;transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);pointer-events:none;white-space:nowrap;display:flex;align-items:center;justify-content:center;';
-                // Removed the yellow dot indicator
-                toast.innerHTML = `<span id="_global_toast_msg"></span>`;
-                document.body.appendChild(toast);
-            }
-
-            document.getElementById('_global_toast_msg').innerHTML = message;
-
-            requestAnimationFrame(() => {
-                toast.style.opacity = '1';
-                toast.style.transform = 'translateX(-50%) scale(1) translateY(0)';
-                clearTimeout(toast._hideTimer);
-                toast._hideTimer = setTimeout(() => {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateX(-50%) scale(0.85) translateY(-20px)';
-                }, duration);
-            });
-        }
-
-        function setSyncStatus(msg, progress = null) {
-            const wrapper = document.getElementById('footer-notification-wrapper');
-            if (!wrapper) return;
-            if (!msg) {
-                wrapper.innerHTML = '';
-                wrapper.classList.add('hidden');
-                return;
-            }
-            const mLower = msg.toLowerCase();
-            // Block connection, sync, server, save, and photo status notifications in footer
-            if (mLower.includes('connect') || mLower.includes('sync') || mLower.includes('server') || mLower.includes('save') || mLower.includes('photo')) {
-                wrapper.innerHTML = '';
-                wrapper.classList.add('hidden');
-                return;
-            }
-            wrapper.classList.remove('hidden');
-            let progressHtml = (progress !== null) ? `<span class="ml-2 text-emerald-600 font-black italic text-[10px]">${progress}%</span>` : '';
-            if (mLower.includes('required') || mLower.includes('error') || mLower.includes('failed')) {
-                wrapper.innerHTML = `<span class="text-[10.5px] font-black text-rose-500 uppercase italic animate-pulse">${msg}</span>`;
-            } else {
-                wrapper.innerHTML = `<span class="text-[10.5px] font-black text-emerald-600 uppercase italic animate-pulse"><i class="fa-solid fa-rotate mr-1 fa-spin"></i> ${msg}</span>${progressHtml}`;
-            }
-        }
-
-        const FB_STANDARD_FIELDS = [
-            { id: 'photo', type: 'image', label: 'Student Photo' },
-            { id: 'sclass', type: 'select', label: 'Class' },
-            { id: 'gender', type: 'select', label: 'Gender' },
-            { id: 'studentName', type: 'text', label: 'Student Name' },
-            { id: 'fatherName', type: 'text', label: "Father's Name" },
-            { id: 'dob', type: 'date', label: 'Date of Birth' },
-            { id: 'mobile', type: 'number', label: 'Mobile Number' },
-            { id: 'aadhar', type: 'number', label: 'Aadhar Number' },
-            { id: 'address', type: 'text', label: 'Address' }
-        ];
-        const FB_DEFAULT_SELECT_OPTIONS = {
-            sclass: ['General', 'Nursery', 'KG-1', 'KG-2', 'Class 1', 'Class 2', 'Class 3'],
-            gender: ['Male', 'Female', 'Other']
-        };
-        const FB_FIXED_TOP_FIELDS = [];
-
-        let fb_standard_config = {};
-        let fb_form_order = [];
-        let fb_standard_labels = {};
-        let fb_standard_meta = {};
-        const FB_CUSTOM_LIMIT = 5;
-        let fb_filter_mode = 'all';
-        let fb_search_term = '';
-        let fb_editor_draft = null;
-
-        function fb_bootFromStorage() {
-            const saved = localStorage.getItem('identify_fb_fields');
-            if (saved) {
-                try { fb_fields = JSON.parse(saved); } catch (e) { fb_fields = []; }
-            } else {
-                fb_fields = [];
-            }
-            if (!Array.isArray(fb_fields)) fb_fields = [];
-            if (fb_fields.length > FB_CUSTOM_LIMIT) fb_fields = fb_fields.slice(0, FB_CUSTOM_LIMIT);
-
-            const savedRemoved = localStorage.getItem('identify_fb_removed');
-            if (savedRemoved) {
-                try { fb_removed = JSON.parse(savedRemoved); } catch (e) { fb_removed = []; }
-            } else {
-                fb_removed = [];
-            }
-            if (!Array.isArray(fb_removed)) fb_removed = [];
-
-            const savedStd = localStorage.getItem('identify_fb_std_config');
-            if (savedStd) {
-                try { fb_standard_config = JSON.parse(savedStd); } catch (e) { fb_standard_config = {}; }
-            } else {
-                fb_standard_config = {};
-            }
-
-            const savedStdLabels = localStorage.getItem('identify_fb_std_labels');
-            if (savedStdLabels) {
-                try { fb_standard_labels = JSON.parse(savedStdLabels); } catch (e) { fb_standard_labels = {}; }
-            } else {
-                fb_standard_labels = {};
-            }
-
-            const savedStdMeta = localStorage.getItem('identify_fb_std_meta');
-            if (savedStdMeta) {
-                try { fb_standard_meta = JSON.parse(savedStdMeta); } catch (e) { fb_standard_meta = {}; }
-            } else {
-                fb_standard_meta = {};
-            }
-
-            FB_STANDARD_FIELDS.forEach(f => {
-                if (!(f.id in fb_standard_config)) {
-                    fb_standard_config[f.id] = { enabled: true, required: ['studentName', 'fatherName', 'sclass', 'photo'].includes(f.id) };
-                }
-            });
-            FB_FIXED_TOP_FIELDS.forEach(fid => {
-                if (!(fid in fb_standard_config)) fb_standard_config[fid] = { enabled: true, required: false };
-                fb_standard_config[fid].enabled = true;
-            });
-
-            const savedOrder = localStorage.getItem('identify_fb_form_order');
-            const savedStdOrder = localStorage.getItem('identify_fb_std_order');
-            const defaultOrder = FB_STANDARD_FIELDS.map(f => f.id);
-            if (savedOrder) {
-                try { fb_form_order = JSON.parse(savedOrder); } catch (e) { fb_form_order = defaultOrder.slice(); }
-            } else if (savedStdOrder) {
-                try { fb_form_order = JSON.parse(savedStdOrder); } catch (e) { fb_form_order = defaultOrder.slice(); }
-            } else {
-                fb_form_order = defaultOrder.slice();
-            }
-            const validStdIds = new Set(defaultOrder);
-            
-            // Ensure all standard fields exist
-            defaultOrder.forEach(id => { if (!fb_form_order.includes(id)) fb_form_order.push(id); });
-            
-            // Ensure all custom fields exist
-            fb_fields.forEach(f => {
-                if (!fb_form_order.includes(f.id)) fb_form_order.push(f.id);
-            });
-            
-            // Cleanup deleted fields (keep only standard or existing custom)
-            fb_form_order = fb_form_order.filter(id => validStdIds.has(id) || fb_fields.some(f => f.id === id));
-            
-            const tail = fb_form_order.filter(id => !FB_FIXED_TOP_FIELDS.includes(id));
-            fb_form_order = [...FB_FIXED_TOP_FIELDS, ...tail];
-            fb_applySelectOptionsToHiddenInputs();
-        }
-
-        function fb_loadActiveFormToBuilder() {
-            fb_bootFromStorage();
-
-            fb_renderForm();
-            
-            // Set QR toggle state on load
-            const qrEnabled = localStorage.getItem('identify_qr_enabled') === 'true';
-            const qrEl = document.getElementById('fb_qr_enable');
-            if (qrEl) qrEl.checked = qrEnabled;
-        }
-
-        function fb_toggleQrEnable(checked) {
-            localStorage.setItem('identify_qr_enabled', checked ? 'true' : 'false');
-            showToast(checked ? '<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">qr_code_2</span> QR Code Saving Enabled' : '<span class="material-symbols-outlined text-[18px] mr-2" style="font-variation-settings: \'FILL\' 1; vertical-align: middle;">qr_code_2</span> QR Code Saving Disabled');
-            
-            if (checked && !localStorage.getItem('identify_qr_fields')) {
-                let savedFields = ['id'];
-                fb_form_order.forEach(id => {
-                    let f = null;
-                    const isStandard = FB_STANDARD_FIELDS.some(sf => sf.id === id);
-                    if (isStandard) {
-                        const stdField = FB_STANDARD_FIELDS.find(sf => sf.id === id);
-                        const config = fb_standard_config[id] || { enabled: true };
-                        if (!config.enabled) return;
-                        f = { id: id, type: stdField.type };
-                    } else {
-                        f = fb_fields.find(cf => cf.id === id);
-                    }
-                    if (f && f.type !== 'section' && f.type !== 'image' && id !== 'photo') {
-                        savedFields.push(f.id);
-                    }
-                });
-                localStorage.setItem('identify_qr_fields', JSON.stringify(savedFields));
-            }
-            fb_renderForm();
-        }
-
-        function fb_toggleFieldQr(id) {
-            let savedFields = JSON.parse(localStorage.getItem('identify_qr_fields') || '["id"]');
-            if (savedFields.includes(id)) {
-                savedFields = savedFields.filter(f => f !== id);
-            } else {
-                savedFields.push(id);
-            }
-            if (savedFields.length === 0) savedFields = ['id']; // ensure at least one field is selected
-            localStorage.setItem('identify_qr_fields', JSON.stringify(savedFields));
-            fb_renderForm();
-        }
-
-        function fb_resetBuilderView(silent = false) {
-            fb_filter_mode = 'all';
-            fb_search_term = '';
-            const input = document.getElementById('fb_searchInput');
-            if (input) input.value = '';
-            if (!silent) fb_renderForm();
-        }
-
-        function fb_setFilter(mode) {
-            fb_filter_mode = mode || 'all';
-            fb_renderForm();
-        }
-
-        function fb_setSearch(value) {
-            fb_search_term = (value || '').trim();
-            fb_renderForm();
-        }
-
-        function fb_findField(id) {
-            return fb_fields.find(f => String(f.id) === String(id));
-        }
-
-        // Ported from source builder: keep app state synced after each builder action.
-        function fb_syncToAppData() {
-            const limitedFields = (Array.isArray(fb_fields) ? fb_fields : []).slice(0, FB_CUSTOM_LIMIT);
-            localStorage.setItem('identify_fb_fields', JSON.stringify(limitedFields));
-            localStorage.setItem('identify_fb_removed', JSON.stringify(Array.isArray(fb_removed) ? fb_removed : []));
-            localStorage.setItem('identify_fb_std_config', JSON.stringify(fb_standard_config || {}));
-            localStorage.setItem('identify_fb_form_order', JSON.stringify(Array.isArray(fb_form_order) ? fb_form_order : []));
-            localStorage.setItem('identify_fb_std_labels', JSON.stringify(fb_standard_labels || {}));
-            localStorage.setItem('identify_fb_std_meta', JSON.stringify(fb_standard_meta || {}));
-
-            for (let i = 1; i <= 5; i++) {
-                const f = limitedFields[i - 1];
-                customFieldsConfig[`customField${i}`] = {
-                    active: !!f,
-                    label: f ? (f.label || `Custom ${i}`) : `Custom ${i}`
-                };
-            }
-            localStorage.setItem('identifyCustomFields', JSON.stringify(customFieldsConfig));
-            fb_applySelectOptionsToHiddenInputs();
-        }
-
-        function fb_removeAllCustom() {
-            if (fb_fields.length === 0) {
-                showToast('No custom fields to clear.');
-                return;
-            }
-            showModal('confirm', 'Clear All Custom Fields?', 'All custom fields will move to Recently Removed.', () => {
-                fb_removed = [...fb_fields, ...fb_removed];
-                fb_fields = [];
-                fb_renderForm();
-                fb_syncToAppData();
-                showToast('Custom fields cleared.');
-            }, 'Clear');
-        }
-
-        function fb_updateBuilderStats() {
-            const stdEnabled = FB_STANDARD_FIELDS.filter(f => (fb_standard_config[f.id] || { enabled: true, required: false }).enabled).length;
-            const requiredTotal = FB_STANDARD_FIELDS.filter(f => (fb_standard_config[f.id] || { enabled: true, required: false }).enabled && (fb_standard_config[f.id] || { enabled: true, required: false }).required).length + fb_fields.filter(f => !!f.required).length;
-
-            const statStd = document.getElementById('fb_stat_standard');
-            const statCustom = document.getElementById('fb_stat_custom');
-            const statRequired = document.getElementById('fb_stat_required');
-            const limit = document.getElementById('fb_limit_label');
-            if (statStd) statStd.textContent = String(stdEnabled);
-            if (statCustom) statCustom.textContent = String(fb_fields.length);
-            if (statRequired) statRequired.textContent = String(requiredTotal);
-            if (limit) limit.textContent = `${fb_fields.length} / ${FB_CUSTOM_LIMIT} used`;
-        }
-
-        function fb_updateFilterButtons() {
-            const btns = [
-                { id: 'fb_filter_all', mode: 'all' },
-                { id: 'fb_filter_standard', mode: 'standard' },
-                { id: 'fb_filter_custom', mode: 'custom' },
-                { id: 'fb_filter_required', mode: 'required' }
-            ];
-            btns.forEach(cfg => {
-                const btn = document.getElementById(cfg.id);
-                if (!btn) return;
-                if (fb_filter_mode === cfg.mode) {
-                    btn.className = 'h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition bg-emerald-600 text-white';
-                } else {
-                    btn.className = 'h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition bg-slate-100 text-slate-600';
-                }
-            });
-        }
-
-        function fb_getTypeLabel(type) {
-            if (type === 'text') return 'Text';
-            if (type === 'number') return 'Number';
-            if (type === 'date') return 'Date';
-            if (type === 'select') return 'Dropdown';
-            if (type === 'image') return 'Image';
-            return 'Field';
-        }
-
-        function fb_getStandardLabel(id, fallback = '') {
-            return (fb_standard_labels && fb_standard_labels[id]) ? fb_standard_labels[id] : fallback;
-        }
-
-        function fb_getFieldIcon(field) {
-            const id = String((field && field.id) || '').toLowerCase();
-            const type = String((field && field.type) || '').toLowerCase();
-            const label = String((field && field.label) || '').toLowerCase();
-            if (id === 'studentname' || label.includes('student')) return 'fa-user';
-            if (id === 'fathername' || label.includes('father')) return 'fa-user-plus';
-            if (id === 'dob' || label.includes('dob') || label.includes('date')) return 'fa-calendar-days';
-            if (id === 'mobile' || label.includes('mobile') || label.includes('phone')) return 'fa-phone';
-            if (id === 'aadhar' || label.includes('aadhar') || label.includes('aadhaar')) return 'fa-id-card';
-            if (id === 'address' || label.includes('address')) return 'fa-map-location-dot';
-            if (id === 'sclass' || label.includes('class')) return 'fa-book-open';
-            if (id === 'gender' || label.includes('gender')) return 'fa-users';
-            if (type === 'select') return 'fa-caret-down';
-            if (type === 'number') return 'fa-hashtag';
-            if (type === 'date') return 'fa-calendar-days';
-            if (type === 'image') return 'fa-camera';
-            return 'fa-circle-info';
-        }
-
-        function fb_getStandardSelectOptions(fieldId) {
-            const defaults = Array.isArray(FB_DEFAULT_SELECT_OPTIONS[fieldId]) ? FB_DEFAULT_SELECT_OPTIONS[fieldId] : [];
-            const meta = (fb_standard_meta && Array.isArray(fb_standard_meta[fieldId]?.options)) ? fb_standard_meta[fieldId].options : [];
-            const source = meta.length ? meta : defaults;
-            const clean = source.map(v => String(v || '').trim()).filter(Boolean);
-            return clean.length ? clean : defaults.slice();
-        }
-
-        function fb_applySelectOptionsToHiddenInputs() {
-            const applyOptions = (selectEl, options, fallbackValue) => {
-                if (!selectEl) return;
-                const currentValue = String(selectEl.value || '').trim();
-                const clean = (Array.isArray(options) ? options : []).map(v => String(v || '').trim()).filter(Boolean);
-                const merged = clean.length ? clean.slice() : [fallbackValue];
-                if (currentValue && !merged.includes(currentValue)) merged.push(currentValue);
-                if (!merged.length) merged.push(fallbackValue);
-                const previous = currentValue || fallbackValue;
-                selectEl.innerHTML = merged.map(opt => `<option value="${String(opt).replace(/"/g, '&quot;')}">${opt}</option>`).join('');
-                selectEl.value = merged.includes(previous) ? previous : merged[0];
-            };
-
-            applyOptions(document.getElementById('in-sclass'), fb_getStandardSelectOptions('sclass'), 'General');
-            applyOptions(document.getElementById('in-gender'), fb_getStandardSelectOptions('gender'), 'Other');
-        }
-
-        function fb_renderForm() {
-            const container = document.getElementById('fb_formContainer');
-            const emptyState = document.getElementById('fb_emptyState');
-            if (!container) return;
-            container.innerHTML = '';
-            fb_updateBuilderStats();
-            fb_updateFilterButtons();
-
-            if (emptyState) emptyState.classList.add('hidden');
-
-            const term = fb_search_term.toLowerCase();
-            const matches = (txt) => !term || String(txt || '').toLowerCase().includes(term);
-            const allowStandard = fb_filter_mode === 'all' || fb_filter_mode === 'standard' || fb_filter_mode === 'required';
-            const allowCustom = fb_filter_mode === 'all' || fb_filter_mode === 'custom' || fb_filter_mode === 'required';
-            let renderedCount = 0;
-            const qrEnabled = localStorage.getItem('identify_qr_enabled') === 'true';
-            const qrFields = JSON.parse(localStorage.getItem('identify_qr_fields') || '["id"]');
-
-            // UNIFIED RENDER LOOP
-            if (Array.isArray(fb_form_order)) fb_form_order.forEach((id, orderIndex) => {
-                const isStandard = FB_STANDARD_FIELDS.some(f => f.id === id);
-                if (isStandard && allowStandard) {
-                    const field = FB_STANDARD_FIELDS.find(f => f.id === id);
-                    const config = fb_standard_config[field.id] || { enabled: true, required: false };
-                    const isEnabled = config.enabled;
-                    const isRequired = config.required;
-                    const displayLabel = fb_getStandardLabel(field.id, field.label);
-                    const stdMeta = fb_standard_meta[field.id] || {};
-                    const effectiveType = stdMeta.type || field.type;
-                    const effectiveField = { ...field, label: displayLabel, type: effectiveType };
-                    const isFixedTopField = FB_FIXED_TOP_FIELDS.includes(field.id);
-                    if (!isEnabled) return;
-                    if (fb_filter_mode === 'required' && !isRequired) return;
-                    if (!matches(displayLabel) && !matches('standard')) return;
-
-                    const div = document.createElement('div');
-                    div.className = 'w-full mb-3';
-                    div.innerHTML = `<div class="system-card p-4 rounded-2xl flex flex-col gap-3 transition-all ${isEnabled ? 'border-emerald-100 hover:border-emerald-300 bg-white' : 'opacity-60 bg-slate-50'}">
-                    <div class="flex items-center gap-3">
-                        <div class="flex-1">
-                            <div class="text-[13px] font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                <i class="fa-solid ${fb_getFieldIcon(effectiveField)} text-[13px] ${isEnabled ? 'text-emerald-600' : 'text-slate-400'}"></i>
-                                <span>${displayLabel}</span>
-                            </div>
-                        </div>
-                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                            ${fb_getTypeLabel(effectiveType)}
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-end gap-2 border-t border-slate-50 pt-3">
-                        ${qrEnabled && effectiveType !== 'image' && field.id !== 'photo' && effectiveType !== 'section' ? `
-                        <button onclick="fb_toggleFieldQr('${field.id}')" class="w-9 h-9 rounded-full border-2 transition active:scale-95 hover:shadow-sm ${qrFields.includes(field.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-500 hover:border-emerald-200'}" title="Include in QR Code">
-                            <i class="fa-solid fa-qrcode text-[11px]"></i>
-                        </button>
-                        ` : ''}
-                        <button onclick="fb_openStandardEditor('${field.id}')" class="w-9 h-9 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-sm transition active:scale-95" title="Edit">
-                            <i class="fa-solid fa-pen text-xs"></i>
-                        </button>
-                        <button onclick="fb_removeStandardField('${field.id}')" class="w-9 h-9 rounded-full border ${isFixedTopField ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 hover:shadow-sm'} transition active:scale-95" title="${isFixedTopField ? 'This field is fixed' : 'Delete'}">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                        <button onclick="fb_toggleStandardRequired('${field.id}')" class="w-9 h-9 rounded-full border-2 transition active:scale-95 hover:shadow-sm ${isRequired ? 'border-rose-500 bg-rose-500 text-white' : 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'}" title="Required">
-                            <i class="fa-solid fa-asterisk text-[10px]"></i>
-                        </button>
-                        <button onclick="fb_moveFieldInOrder(${orderIndex}, -1)" class="w-9 h-9 rounded-full border ${isFixedTopField ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 hover:shadow-sm'} transition active:scale-95" title="${isFixedTopField ? 'This field is fixed' : 'Move Up'}">
-                            <i class="fa-solid fa-arrow-up text-xs"></i>
-                        </button>
-                        <button onclick="fb_moveFieldInOrder(${orderIndex}, 1)" class="w-9 h-9 rounded-full border ${isFixedTopField ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 hover:shadow-sm'} transition active:scale-95" title="${isFixedTopField ? 'This field is fixed' : 'Move Down'}">
-                            <i class="fa-solid fa-arrow-down text-xs"></i>
-                        </button>
-                    </div>
-                    </div>`;
-                    container.appendChild(div);
-                    renderedCount++;
-                } else if (!isStandard && allowCustom) {
-                    const field = fb_fields.find(f => f.id === id);
-                    if (!field) return;
-                    if (fb_filter_mode === 'required' && !field.required) return;
-                    if (!matches(field.label) && !matches(field.type) && !matches('custom')) return;
-                    const div = document.createElement('div');
-                    div.className = 'w-full group mb-3';
-                    const isEditing = fb_currentEditingId === field.id;
-                    div.innerHTML = `
-                    <div class="system-card p-4 rounded-2xl transition-all border ${isEditing ? 'border-emerald-500 bg-emerald-50/20 shadow-lg' : 'hover:border-emerald-300'}">
-                        <div class="flex items-start justify-between">
-                            <div class="flex items-center gap-3">
-                                <div>
-                                    <div class="text-[13px] font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                        <i class="fa-solid ${fb_getFieldIcon(field)} text-[13px] text-emerald-600"></i>
-                                        <span>${field.label} <span class="text-[10px] text-emerald-500 font-normal">(Custom)</span></span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                ${fb_getTypeLabel(field.type)}
-                            </div>
-                        </div>
-                        <div class="mt-4 flex items-center justify-end gap-2 border-t border-slate-50 pt-3">
-                            ${qrEnabled && field.type !== 'image' && field.type !== 'section' ? `
-                            <button onclick="fb_toggleFieldQr('${field.id}')" class="w-9 h-9 rounded-full border-2 transition active:scale-95 hover:shadow-sm ${qrFields.includes(field.id) ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-500 hover:border-emerald-200'}" title="Include in QR Code">
-                                <i class="fa-solid fa-qrcode text-[11px]"></i>
-                            </button>
-                            ` : ''}
-                            <button onclick="fb_openEditor('${field.id}')" class="w-9 h-9 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-sm transition active:scale-95" title="Edit">
-                                <i class="fa-solid fa-pen text-xs"></i>
-                            </button>
-                            <button onclick="fb_deleteField('${field.id}')" class="w-9 h-9 rounded-full border border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 hover:shadow-sm transition active:scale-95" title="Delete">
-                                <i class="fa-solid fa-trash-can text-xs"></i>
-                            </button>
-                            <button onclick="fb_toggleRequired('${field.id}')" class="w-9 h-9 rounded-full border-2 transition active:scale-95 hover:shadow-sm ${field.required ? 'border-rose-500 bg-rose-500 text-white' : 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'}" title="Required">
-                                <i class="fa-solid fa-asterisk text-[10px]"></i>
-                            </button>
-                            <button onclick="fb_moveFieldInOrder(${orderIndex}, -1)" class="w-9 h-9 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 hover:shadow-sm transition active:scale-95" title="Move Up">
-                                <i class="fa-solid fa-arrow-up text-xs"></i>
-                            </button>
-                            <button onclick="fb_moveFieldInOrder(${orderIndex}, 1)" class="w-9 h-9 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 hover:shadow-sm transition active:scale-95" title="Move Down">
-                                <i class="fa-solid fa-arrow-down text-xs"></i>
-                            </button>
-                        </div>
-                    </div>`;
-                    container.appendChild(div);
-                    renderedCount++;
-                }
-            });
-
-            if (emptyState) {
-                emptyState.classList.toggle('hidden', renderedCount > 0);
-                emptyState.classList.toggle('flex', renderedCount === 0);
-            }
-
-            fb_renderRemoved();
-        }
-
-        function fb_toggleStandardEnabled(id) {
-            if (FB_FIXED_TOP_FIELDS.includes(id)) {
-                if (!(id in fb_standard_config)) fb_standard_config[id] = { enabled: true, required: false };
-                fb_standard_config[id].enabled = true;
-                fb_renderForm();
-                fb_syncToAppData();
-                return;
-            }
-            if (!(id in fb_standard_config)) fb_standard_config[id] = { enabled: true, required: false };
-            fb_standard_config[id].enabled = !fb_standard_config[id].enabled;
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_toggleStandardRequired(id) {
-            if (!(id in fb_standard_config)) fb_standard_config[id] = { enabled: true, required: false };
-            fb_standard_config[id].required = !fb_standard_config[id].required;
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_removeStandardField(id) {
-            if (FB_FIXED_TOP_FIELDS.includes(id)) {
-                showToast('Photo, Class and Gender are fixed fields.');
-                return;
-            }
-            if (!(id in fb_standard_config)) fb_standard_config[id] = { enabled: true, required: false };
-            fb_standard_config[id].enabled = false;
-            const base = FB_STANDARD_FIELDS.find(f => f.id === id);
-            const meta = fb_standard_meta[id] || {};
-            const key = `standard:${id}`;
-            const exists = fb_removed.find(r => String(r.__key || '') === key);
-            if (!exists && base) {
-                fb_removed.unshift({
-                    __key: key,
-                    __source: 'standard',
-                    id: id,
-                    label: fb_getStandardLabel(id, base.label),
-                    type: meta.type || base.type,
-                    options: Array.isArray(meta.options) ? meta.options.slice() : [],
-                    required: !!fb_standard_config[id].required
-                });
-            }
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_moveFieldInOrder(orderIndex, dir) {
-            if (!Array.isArray(fb_form_order)) return;
-            let targetIndex = orderIndex + dir;
-            
-            // Find next visible field index
-            while(targetIndex >= 0 && targetIndex < fb_form_order.length) {
-                const id = fb_form_order[targetIndex];
-                const isStandard = FB_STANDARD_FIELDS.some(f => f.id === id);
-                let isVisible = true;
-                if (isStandard) {
-                    const config = fb_standard_config[id] || { enabled: true };
-                    isVisible = config.enabled;
-                } else {
-                    const exists = fb_fields.some(f => f.id === id);
-                    isVisible = exists;
-                }
-                if (isVisible) break;
-                targetIndex += dir;
-            }
-            
-            if (targetIndex < 0 || targetIndex >= fb_form_order.length) return;
-            
-            if (FB_FIXED_TOP_FIELDS.includes(fb_form_order[orderIndex]) || FB_FIXED_TOP_FIELDS.includes(fb_form_order[targetIndex])) {
-                showToast('Photo, Class and Gender position is fixed.');
-                return;
-            }
-            [fb_form_order[orderIndex], fb_form_order[targetIndex]] = [fb_form_order[targetIndex], fb_form_order[orderIndex]];
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_addField(type, customLabel, customOptions) {
-            if (fb_fields.length >= FB_CUSTOM_LIMIT) {
-                showToast(`Custom field limit reached (${FB_CUSTOM_LIMIT})`);
-                return;
-            }
-            const id = String(Date.now());
-            let label = customLabel || 'New Field';
-            if (type === 'text') label = customLabel || 'New Name';
-            if (type === 'number') label = customLabel || 'New Number';
-            if (type === 'date') label = customLabel || 'New Date';
-            if (type === 'select') label = customLabel || 'New Dropdown';
-            if (type === 'image') label = customLabel || 'New Capture';
-
-            const selectOptions = Array.isArray(customOptions) ? customOptions : ['Option 1', 'Option 2'];
-            const newField = { id, type, label, placeholder: '', required: false, options: type === 'select' ? selectOptions : [] };
-            fb_fields.push(newField);
-            fb_form_order.push(id);
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_openQuickAdd() {
-            const backdrop = document.getElementById('fb_quickAddBackdrop');
-            if (backdrop) backdrop.classList.add('active');
-            const typeEl = document.getElementById('fb_quickAddType');
-            const labelEl = document.getElementById('fb_quickAddLabel');
-            const optList = document.getElementById('fb_quickAddOptionsList');
-            if (typeEl) typeEl.value = 'text';
-            if (labelEl) labelEl.value = '';
-            if (optList) optList.innerHTML = '';
-            fb_toggleQuickAddOptions('text');
-            fb_updateFieldNameSuggestions();
-        }
-
-        function fb_closeQuickAdd(evt) {
-            if (evt && evt.target && evt.target.id !== 'fb_quickAddBackdrop') return;
-            const backdrop = document.getElementById('fb_quickAddBackdrop');
-            if (backdrop) backdrop.classList.remove('active');
-        }
-
-        function fb_updateFieldNameSuggestions() {
-            const list = document.getElementById('fb_field_suggestions');
-            if (!list) return;
-            const presets = {
-                text: ['Mother Name', 'Aadhaar No', 'Blood Group', 'Guardian Name', 'Nationality'],
-                number: ['Roll No', 'Registration No', 'Scholar No', 'ID Card No'],
-                select: ['Religion', 'Category', 'House', 'Section', 'Transport'],
-                date: ['Admission Date', 'Registration Date']
-            };
-            const type = document.getElementById('fb_quickAddType').value;
-            const names = presets[type] || [];
-            list.innerHTML = names.map(n => `<option value="${n}"></option>`).join('');
-        }
-
-        function fb_toggleQuickAddOptions(type) {
-            const wrap = document.getElementById('fb_quickAddOptionsWrap');
-            if (wrap) wrap.classList.toggle('hidden', type !== 'select');
-            if (type === 'select') fb_quickAddEnsureOptions();
-        }
-
-        function fb_quickAddEnsureOptions() {
-            const list = document.getElementById('fb_quickAddOptionsList');
-            if (list && list.children.length === 0) {
-                fb_quickAddAddOption('Option 1');
-                fb_quickAddAddOption('Option 2');
-            }
-        }
-
-        function fb_quickAddAddOption(value = '') {
-            const list = document.getElementById('fb_quickAddOptionsList');
-            if (!list) return;
-            const div = document.createElement('div');
-            div.className = 'flex gap-2 items-center';
-            div.innerHTML = `
-            <input type="text" value="${value}" class="app-input py-2 text-sm flex-1 font-bold" placeholder="New Option">
-            <button class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center" onclick="this.parentElement.remove()"><i class="fa-solid fa-times text-xs"></i></button>
-        `;
-            list.appendChild(div);
-        }
-
-        function fb_quickAddGetOptions() {
-            const list = document.getElementById('fb_quickAddOptionsList');
-            if (!list) return [];
-            return Array.from(list.querySelectorAll('input')).map(i => (i.value || '').trim()).filter(Boolean);
-        }
-
-        function fb_confirmQuickAdd() {
-            if (fb_fields.length >= FB_CUSTOM_LIMIT) {
-                showToast(`Only ${FB_CUSTOM_LIMIT} custom fields supported.`);
-                return;
-            }
-            const type = document.getElementById('fb_quickAddType').value;
-            const label = document.getElementById('fb_quickAddLabel').value.trim();
-            if (!label) {
-                showToast('Please enter field name.');
-                return;
-            }
-            const opts = type === 'select' ? fb_quickAddGetOptions() : [];
-            if (type === 'select' && opts.length < 2) {
-                showToast('Dropdown needs at least 2 options.');
-                return;
-            }
-            fb_addField(type, label || undefined, opts);
-            fb_closeQuickAdd();
-            showToast('Custom field added.');
-        }
-
-        function fb_openEditor(id) {
-            const field = fb_fields.find(f => String(f.id) === String(id));
-            if (!field) return;
-            fb_currentEditingId = id;
-            fb_editor_draft = JSON.parse(JSON.stringify(field));
-            const backdrop = document.getElementById('fb_edit_backdrop');
-            if (backdrop) backdrop.classList.add('active');
-            fb_renderEditor();
-            fb_renderForm();
-        }
-
-        function fb_openStandardEditor(id) {
-            const base = FB_STANDARD_FIELDS.find(f => f.id === id);
-            if (!base) return;
-            if (!(id in fb_standard_config)) fb_standard_config[id] = { enabled: true, required: false };
-            const meta = fb_standard_meta[id] || {};
-            fb_currentEditingId = `std:${id}`;
-            fb_editor_draft = {
-                __source: 'standard',
-                id: id,
-                type: meta.type || base.type,
-                label: fb_getStandardLabel(id, base.label),
-                required: !!fb_standard_config[id].required,
-                enabled: !!fb_standard_config[id].enabled,
-                options: Array.isArray(meta.options) && meta.options.length ? meta.options.slice() : fb_getStandardSelectOptions(id)
-            };
-            const backdrop = document.getElementById('fb_edit_backdrop');
-            if (backdrop) backdrop.classList.add('active');
-            fb_renderEditor();
-            fb_renderForm();
-        }
-
-        function fb_closeEditor(evt) {
-            if (evt && evt.target && evt.target.id !== 'fb_edit_backdrop') return;
-            fb_currentEditingId = null;
-            fb_editor_draft = null;
-            const backdrop = document.getElementById('fb_edit_backdrop');
-            if (backdrop) backdrop.classList.remove('active');
-            fb_renderForm();
-        }
-
-        function fb_renderEditor() {
-            const content = document.getElementById('fb_edit_content');
-            if (!content || !fb_editor_draft) return;
-
-            const field = fb_editor_draft;
-            if (field.__source === 'standard') {
-                const isFixedTopField = FB_FIXED_TOP_FIELDS.includes(String(field.id || ''));
-                const typeOptions = ['text', 'number', 'date', 'select', 'image'].map(type => `<option value="${type}" ${field.type === type ? 'selected' : ''}>${type.toUpperCase()}</option>`).join('');
-                const optionsHtml = (field.type === 'select')
-                    ? `
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <label class="block text-[10px] font-black text-slate-400 uppercase ml-1">Dropdown Options</label>
-                            <button onclick="fb_editorAddOption()" class="text-[10px] text-emerald-600 font-black uppercase tracking-widest">+ Add Option</button>
-                        </div>
-                        <div class="space-y-2">
-                            ${(field.options || []).map((opt, idx) => `
-                                <div class="flex gap-2 items-center">
-                                    <input type="text" value="${String(opt).replace(/"/g, '&quot;')}" class="app-input py-2 text-sm flex-1 font-bold" oninput="fb_editorSetOption(${idx}, this.value)" placeholder="Option ${idx + 1}">
-                                    <button class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center" onclick="fb_editorRemoveOption(${idx})"><i class="fa-solid fa-times text-xs"></i></button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `
-                    : '';
-                content.innerHTML = `
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Label</label>
-                    <input type="text" value="${String(field.label || '').replace(/"/g, '&quot;')}" class="app-input text-slate-700 font-bold" oninput="fb_editorSetLabel(this.value)" placeholder="Field label">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Type</label>
-                    ${isFixedTopField
-                        ? `<div class="app-input text-slate-500 font-bold bg-slate-100 cursor-not-allowed">${fb_getTypeLabel(field.type)} (Fixed)</div>`
-                        : `<select class="app-input text-slate-700 font-bold" onchange="fb_editorSetType(this.value)">${typeOptions}</select>`
-                    }
-                </div>
-                <div class="p-4 border border-slate-100 rounded-2xl bg-slate-50 flex items-center justify-between">
-                    <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Required Field</div>
-                    <button onclick="fb_editorToggleRequired()" class="h-8 px-3 rounded-xl border-2 ${field.required ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-slate-100 text-slate-500 bg-white'} text-[9px] font-black uppercase transition active:scale-95">
-                        ${field.required ? 'ON' : 'OFF'}
-                    </button>
-                </div>
-                ${optionsHtml}
-                <button onclick="fb_applyEditor()" class="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm active:scale-95 transition shadow-sm">APPLY CHANGES</button>
-            `;
-                return;
-            }
-
-            const typeOptions = ['text', 'number', 'date', 'select', 'image'].map(type => `<option value="${type}" ${field.type === type ? 'selected' : ''}>${type.toUpperCase()}</option>`).join('');
-            const optionsHtml = field.type === 'select'
-                ? `
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase ml-1">Dropdown Options</label>
-                        <button onclick="fb_editorAddOption()" class="text-[10px] text-emerald-600 font-black uppercase tracking-widest">+ Add Option</button>
-                    </div>
-                    <div class="space-y-2">
-                        ${(field.options || []).map((opt, idx) => `
-                            <div class="flex gap-2 items-center">
-                                <input type="text" value="${String(opt).replace(/"/g, '&quot;')}" class="app-input py-2 text-sm flex-1 font-bold" oninput="fb_editorSetOption(${idx}, this.value)" placeholder="Option ${idx + 1}">
-                                <button class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center" onclick="fb_editorRemoveOption(${idx})"><i class="fa-solid fa-times text-xs"></i></button>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `
-                : '';
-
-            content.innerHTML = `
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Label</label>
-                <input type="text" value="${String(field.label || '').replace(/"/g, '&quot;')}" class="app-input text-slate-700 font-bold" oninput="fb_editorSetLabel(this.value)" placeholder="Field label">
-            </div>
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Field Type</label>
-                <select class="app-input text-slate-700 font-bold" onchange="fb_editorSetType(this.value)">${typeOptions}</select>
-            </div>
-            <div class="p-4 border border-slate-100 rounded-2xl bg-slate-50 flex items-center justify-between">
-                <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Required Field</div>
-                <button onclick="fb_editorToggleRequired()" class="h-8 px-3 rounded-xl border-2 ${field.required ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-slate-100 text-slate-500 bg-white'} text-[9px] font-black uppercase transition active:scale-95">
-                    ${field.required ? 'ON' : 'OFF'}
-                </button>
-            </div>
-            ${optionsHtml}
-            <button onclick="fb_applyEditor()" class="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm active:scale-95 transition shadow-sm">APPLY CHANGES</button>
-        `;
-        }
-
-        function fb_editorSetLabel(value) {
-            if (!fb_editor_draft) return;
-            fb_editor_draft.label = value;
-        }
-
-        function fb_editorSetType(type) {
-            if (!fb_editor_draft) return;
-            fb_editor_draft.type = type;
-            if (type === 'select') {
-                if (!Array.isArray(fb_editor_draft.options) || fb_editor_draft.options.length < 2) {
-                    fb_editor_draft.options = ['Option 1', 'Option 2'];
-                }
-            } else {
-                fb_editor_draft.options = [];
-            }
-            fb_renderEditor();
-        }
-
-        function fb_editorToggleRequired() {
-            if (!fb_editor_draft) return;
-            fb_editor_draft.required = !fb_editor_draft.required;
-            fb_renderEditor();
-        }
-
-        function fb_editorSetOption(index, value) {
-            if (!fb_editor_draft || !Array.isArray(fb_editor_draft.options)) return;
-            fb_editor_draft.options[index] = value;
-        }
-
-        function fb_editorAddOption() {
-            if (!fb_editor_draft || fb_editor_draft.type !== 'select') return;
-            if (!Array.isArray(fb_editor_draft.options)) fb_editor_draft.options = [];
-            fb_editor_draft.options.push(`Option ${fb_editor_draft.options.length + 1}`);
-            fb_renderEditor();
-        }
-
-        function fb_editorRemoveOption(index) {
-            if (!fb_editor_draft || !Array.isArray(fb_editor_draft.options)) return;
-            fb_editor_draft.options.splice(index, 1);
-            fb_renderEditor();
-        }
-
-        function fb_applyEditor() {
-            if (!fb_editor_draft) return;
-            const label = String(fb_editor_draft.label || '').trim();
-            if (!label) {
-                showToast('Field label cannot be empty.');
-                return;
-            }
-
-            if (fb_editor_draft.__source === 'standard') {
-                const sid = String(fb_editor_draft.id || '');
-                const base = FB_STANDARD_FIELDS.find(f => String(f.id) === sid);
-                const cleanType = FB_FIXED_TOP_FIELDS.includes(sid)
-                    ? String((base && base.type) || 'text')
-                    : (String(fb_editor_draft.type || '').trim() || 'text');
-                let cleanOptions = [];
-                if (cleanType === 'select') {
-                    cleanOptions = (fb_editor_draft.options || []).map(o => String(o || '').trim()).filter(Boolean);
-                    if (cleanOptions.length < 1) {
-                        showToast('Please keep at least 1 dropdown option.');
-                        return;
-                    }
-                }
-                fb_standard_labels[sid] = label;
-                if (!(sid in fb_standard_config)) fb_standard_config[sid] = { enabled: true, required: false };
-                fb_standard_config[sid].required = !!fb_editor_draft.required;
-                fb_standard_meta[sid] = {
-                    type: cleanType,
-                    options: cleanType === 'select' ? cleanOptions : []
-                };
-                fb_syncToAppData();
-                fb_closeEditor();
-                showToast('Field updated.');
-                return;
-            }
-
-            fb_editor_draft.label = label;
-            if (fb_editor_draft.type === 'select') {
-                const cleanOptions = (fb_editor_draft.options || []).map(o => String(o || '').trim()).filter(Boolean);
-                if (cleanOptions.length < 2) {
-                    showToast('Dropdown needs at least 2 options.');
-                    return;
-                }
-                fb_editor_draft.options = cleanOptions;
-            } else {
-                fb_editor_draft.options = [];
-            }
-            const idx = fb_fields.findIndex(f => String(f.id) === String(fb_editor_draft.id));
-            if (idx === -1) return;
-            fb_fields[idx] = { ...fb_fields[idx], ...fb_editor_draft };
-            fb_syncToAppData();
-            fb_closeEditor();
-            showToast('Field updated.');
-        }
-
-        // Ported compatibility helpers from source builder.
-        function fb_togglePreview() {
-            fb_isPreview = !fb_isPreview;
-            fb_renderForm();
-        }
-
-        function fb_toggleWidth(id) {
-            const field = fb_findField(id);
-            if (!field) return;
-            field.width = field.width === 'half' ? 'full' : 'half';
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_addOptionSimple(id) {
-            const field = fb_findField(id);
-            if (!field || field.type !== 'select') return;
-            const value = prompt('Add option:');
-            if (!value) return;
-            field.options = Array.isArray(field.options) ? field.options : [];
-            field.options.push(String(value).trim());
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_updateField(id, key, value) {
-            const field = fb_findField(id);
-            if (field) { field[key] = value; fb_renderForm(); fb_syncToAppData(); }
-        }
-
-        function fb_addOptionInline(id) {
-            const field = fb_findField(id);
-            if (field && field.options) { field.options.push(`Option ${field.options.length + 1}`); fb_renderForm(); fb_syncToAppData(); }
-        }
-
-        function fb_updateOption(id, index, value) {
-            const field = fb_findField(id);
-            if (field && field.options) { field.options[index] = value; fb_syncToAppData(); }
-        }
-
-        function fb_removeOption(id, index) {
-            const field = fb_findField(id);
-            if (field && field.options) { field.options.splice(index, 1); fb_renderForm(); fb_syncToAppData(); }
-        }
-
-        function fb_deleteField(id) {
-            const index = fb_fields.findIndex(f => String(f.id) === String(id));
-            if (index !== -1) {
-                const removed = fb_fields.splice(index, 1)[0];
-                removed.__source = 'custom';
-                removed.__key = `custom:${removed.id}`;
-                fb_removed.unshift(removed);
-                fb_renderForm();
-                fb_syncToAppData();
-            }
-        }
-
-        function fb_restoreField(id) {
-            const idx = fb_removed.findIndex(f => String(f.id) === String(id));
-            if (idx === -1) return;
-            const item = fb_removed[idx];
-            if (item.__source === 'standard') {
-                if (!(item.id in fb_standard_config)) fb_standard_config[item.id] = { enabled: true, required: false };
-                fb_standard_config[item.id].enabled = true;
-                if (typeof item.required === 'boolean') fb_standard_config[item.id].required = item.required;
-                if (item.label) fb_standard_labels[item.id] = item.label;
-                if (item.type || item.options) {
-                    fb_standard_meta[item.id] = {
-                        type: item.type || (fb_standard_meta[item.id] && fb_standard_meta[item.id].type) || 'text',
-                        options: Array.isArray(item.options) ? item.options.slice() : []
-                    };
-                }
-                fb_removed.splice(idx, 1);
-                fb_renderForm();
-                fb_syncToAppData();
-                return;
-            }
-
-            if (fb_fields.length >= FB_CUSTOM_LIMIT) {
-                showToast(`Limit reached. Remove one field to restore.`);
-                return;
-            }
-            fb_fields.push(fb_removed.splice(idx, 1)[0]);
-            fb_renderForm();
-            fb_syncToAppData();
-        }
-
-        function fb_permanentlyDeleteField(id) {
-            const idx = fb_removed.findIndex(f => String(f.id) === String(id));
-            if (idx === -1) return;
-            const item = fb_removed[idx];
-            if (item.__source === 'standard') {
-                if (!confirm(`Are you sure you want to permanently delete "${item.label || item.id}"?`)) {
-                    return;
-                }
-            }
-            fb_removed.splice(idx, 1);
-            fb_renderForm();
-            fb_syncToAppData();
-            showToast(`Field permanently deleted`);
-        }
-
-        function fb_moveField(index, dir) {
-            const next = index + dir;
-            if (next >= 0 && next < fb_fields.length) {
-                [fb_fields[index], fb_fields[next]] = [fb_fields[next], fb_fields[index]];
-                fb_renderForm();
-                fb_syncToAppData();
-            }
-        }
-
-        function fb_toggleRequired(id) {
-            const field = fb_findField(id);
-            if (field) { field.required = !field.required; fb_renderForm(); fb_syncToAppData(); }
-        }
-
-        function fb_renderRemoved() {
-            const section = document.getElementById('fb_removed_section');
-            const list = document.getElementById('fb_removed_list');
-            if (!section || !list) return;
-            if (fb_removed.length === 0) { section.classList.add('hidden'); return; }
-            section.classList.remove('hidden');
-            list.innerHTML = fb_removed.map(f => `
-            <div class="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl">
-                <span class="text-[11px] font-black text-slate-700 uppercase">${f.label || f.id}</span>
-                <div class="flex gap-2">
-                    <button onclick="fb_restoreField('${f.id}')" class="text-[9px] font-black text-emerald-600 uppercase tracking-widest border border-emerald-100 px-3 py-1.5 rounded-lg active:scale-95 transition">RESTORE</button>
-                    ${f.__source === 'standard' ? '' : `<button onclick="fb_permanentlyDeleteField('${f.id}')" class="text-[9px] font-black text-rose-600 uppercase tracking-widest border border-rose-100 px-3 py-1.5 rounded-lg active:scale-95 transition">DELETE</button>`}
-                </div>
-            </div>
-        `).join('');
-        }
-
-        async function fb_saveForm() {
-            const btn = document.querySelector('button[onclick="fb_saveForm()"]');
-            const origText = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-                btn.disabled = true;
-            }
-
-            localStorage.setItem('identify_fb_fields', JSON.stringify(fb_fields));
-            localStorage.setItem('identify_fb_removed', JSON.stringify(fb_removed));
-            localStorage.setItem('identify_fb_std_config', JSON.stringify(fb_standard_config));
-
-            // Map to customFieldsConfig for backwards compatibility
-            fb_fields.forEach((f, idx) => {
-                if (idx < 5) {
-                    customFieldsConfig[`customField${idx + 1}`] = { active: true, label: f.label };
-                }
-            });
-            localStorage.setItem('identifyCustomFields', JSON.stringify(customFieldsConfig));
-
-            // Sync to server if available
-            const fbDataToSave = {
-                fields: fb_fields,
-                standardConfig: fb_standard_config,
-                removed: fb_removed,
-                formOrder: fb_form_order,
-                standardLabels: typeof fb_standard_labels !== 'undefined' ? fb_standard_labels : {},
-                standardMeta: typeof fb_standard_meta !== 'undefined' ? fb_standard_meta : {}
-            };
-            serverCallSilent('saveFormFields', [fbDataToSave], () => {
-                if (btn) btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved';
-                setTimeout(() => {
-                    if (btn) {
-                        btn.innerHTML = origText;
-                        btn.disabled = false;
-                    }
-                    setBlankRecordMode('none');
-                    showToast('Form updated successfully!');
-                }, 1000);
-            }, (err) => {
-                console.error('Failed to sync fields to server', err);
-                if (btn) btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved Locally';
-                setTimeout(() => {
-                    if (btn) {
-                        btn.innerHTML = origText;
-                        btn.disabled = false;
-                    }
-                    setBlankRecordMode('none');
-                    showToast('Fields saved locally.');
-                }, 1000);
-            });
-        }
-            let cropperInstance = null;
-            function openCropModal() {
-                const img = document.getElementById('blank-photo-preview-img');
-                if (!img || !img.src) return;
-
-                const modal = document.getElementById('crop-modal');
-                const cropImg = document.getElementById('crop-modal-img');
-
-                cropImg.src = img.src;
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-
-                const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
-                const cWidth = pMeta.width || 600;
-                const cHeight = pMeta.height || 800;
-
-                if (cropperInstance) { cropperInstance.destroy(); }
-                cropperInstance = new Cropper(cropImg, {
-                    aspectRatio: cWidth / cHeight,
-                    viewMode: 1,
-                    autoCropArea: 1,
-                });
-            }
-
-            function closeCropModal() {
-                const modal = document.getElementById('crop-modal');
-                if (modal) {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                }
-                if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
-            }
-
-            function applyCrop() {
-                if (!cropperInstance) return;
-                const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
-                const cWidth = pMeta.width || 600;
-                const cHeight = pMeta.height || 800;
-                const canvas = cropperInstance.getCroppedCanvas({
-                    width: cWidth,
-                    height: cHeight,
-                });
-                if (canvas) {
-                    // Use 0.6 quality to ensure base64 image fits comfortably in Firestore 1MB limit
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                    photoData = dataUrl;
-                    showPhotoPreview(photoData);
-                    if (typeof queueServerDraftSync === 'function') queueServerDraftSync();
-                    renderCurrentRecordsPage();
-                }
-                closeCropModal();
-            }
-    </script>
-    <div id="crop-modal" class="fixed inset-0 bg-black/60 z-[999] hidden items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-6 w-full max-w-md flex flex-col shadow-2xl">
-            <h3 class="font-black text-xl text-slate-800 mb-4">Crop Photo</h3>
-            <div class="w-full h-[60vh] max-h-[400px] bg-slate-100 relative rounded-xl overflow-hidden mb-6">
-                <img id="crop-modal-img" class="max-w-full block">
-            </div>
-            <div class="flex justify-end gap-3 mt-auto">
-                <button onclick="closeCropModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all active:scale-95">Cancel</button>
-                <button onclick="applyCrop()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2">
-                    <i class="fa-solid fa-crop-simple"></i> Apply Crop
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mobile Login Keyboard Fix -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const overlay = document.getElementById('login-overlay');
-            if(overlay) {
-                const loginCard = overlay.querySelector('.relative.w-full.max-w-\\[340px\\]');
-                const inputs = overlay.querySelectorAll('input');
-                
-                if(loginCard && inputs.length > 0) {
-                    inputs.forEach(input => {
-                        input.addEventListener('focus', () => {
-                            if (window.innerWidth < 640) {
-                                loginCard.style.transform = 'translateY(-20vh)';
-                                loginCard.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-                            }
-                        });
-                        input.addEventListener('blur', () => {
-                            loginCard.style.transform = 'translateY(0)';
-                        });
-                    });
-                }
-            }
-        });
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js');
-        }
-    </script>
-    <script>
-    let ie_importParsedData = [];
-    let ie_importHeaders = [];
-
-    function buildImportExportHtml() {
-        return `
-            <div class="p-6 bg-white rounded-3xl system-card flex flex-col items-start w-full max-w-md mx-auto mb-20">
-                <div class="w-full space-y-4">
-                    
-                    <!-- Import Content -->
-                    <div id="ie-content-import" class="space-y-4 block w-full">
-                        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm w-full">
-                            <h3 class="text-[11px] font-black text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-500"></i> Upload Excel File</h3>
-                            <label id="ie-upload-label" class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-center cursor-pointer hover:bg-emerald-100 transition group w-full text-center gap-3">
-                                <i class="fa-solid fa-cloud-arrow-up text-emerald-600 text-lg"></i>
-                                <span class="text-xs font-bold text-slate-700">Select File</span>
-                                <input type="file" id="ie-import-file" accept=".xlsx, .xls" class="hidden" onchange="ie_handleFileUpload(event)">
-                            </label>
-                            <div id="ie-import-file-details" class="hidden mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100 relative group">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <i class="fa-solid fa-file-excel text-emerald-500 text-sm"></i>
-                                    <p id="ie-import-filename" class="text-xs font-bold text-slate-800 truncate pr-6"></p>
-                                </div>
-                                <div class="flex justify-between items-center text-[10px] text-slate-500 font-medium pl-6">
-                                    <span id="ie-import-filesize"></span>
-                                    <span id="ie-import-rowcount" class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold"></span>
-                                </div>
-                                <button type="button" onclick="ie_removeImportFile()" class="absolute top-3 right-3 w-6 h-6 rounded-full bg-red-100 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm" title="Remove File">
-                                    <i class="fa-solid fa-xmark text-xs"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="ie-import-mapping-container" class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hidden w-full">
-                            <h3 class="text-[11px] font-black text-slate-800 mb-1.5 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-list-check text-emerald-500"></i> Select Columns to Import</h3>
-                            <p class="text-[10px] text-slate-500 mb-3 leading-tight">We found these columns in your Excel file. Select the ones you want to import.</p>
-                            
-                            <div class="flex items-center gap-2 px-3 mb-2">
-                                <span class="w-1/2 text-[10px] font-black text-slate-500 uppercase tracking-wider pl-6">Excel Column</span>
-                                <span class="w-1/2 text-[10px] font-black text-slate-500 uppercase tracking-wider pl-4">System Field</span>
-                            </div>
-
-                            <div id="ie-import-columns-grid" class="grid grid-cols-2 gap-2">
-                                <!-- Injected by JS -->
-                            </div>
-                        </div>
-                        
-                        <button onclick="ie_runImport()" id="ie-btn-import" class="w-full py-3.5 rounded-xl bg-emerald-600 text-white font-black text-[13px] uppercase tracking-widest hover:bg-emerald-700 transition active:scale-[0.98] shadow-md flex items-center justify-center gap-2 hidden mt-2">
-                            <i class="fa-solid fa-upload"></i> Import Now
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function openImportExportModal() {
-        setBlankRecordMode('import_export');
-    }
-    
-    function closeImportExportModal() {
-        // Obsolete
-    }
-    
-    function ie_switchTab(tab) {
-        // Obsolete
-    }
-    
-
-    function ie_removeImportFile() {
-        document.getElementById('ie-import-file').value = '';
-        const label = document.getElementById('ie-upload-label');
-        if (label) label.classList.remove('hidden');
-        document.getElementById('ie-import-file-details').classList.add('hidden');
-        document.getElementById('ie-import-mapping-container').classList.add('hidden');
-        document.getElementById('ie-btn-import').classList.add('hidden');
-        document.getElementById('ie-import-columns-grid').innerHTML = '';
-        ie_importParsedData = [];
-        ie_importHeaders = [];
-    }
-    
-    function ie_handleFileUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
         
-        const label = document.getElementById('ie-upload-label');
-        if (label) label.classList.add('hidden');
-        
-        document.getElementById('ie-import-filename').textContent = file.name;
-        document.getElementById('ie-import-filesize').textContent = (file.size / 1024).toFixed(1) + ' KB';
-        document.getElementById('ie-import-file-details').classList.remove('hidden');
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            ie_importParsedData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
-            
-            document.getElementById('ie-import-rowcount').textContent = ie_importParsedData.length + ' Rows';
-            
-            if (ie_importParsedData.length > 0) {
-                ie_importHeaders = Object.keys(ie_importParsedData[0]);
-                
-                let optionsHtml = '<option value="">-- Ignore Column --</option>';
-                if (typeof FB_STANDARD_FIELDS !== 'undefined') {
-                    FB_STANDARD_FIELDS.forEach(sf => {
-                        optionsHtml += `<option value="${sf.id}">${sf.label}</option>`;
-                    });
-                }
-                if (typeof fb_fields !== 'undefined') {
-                    fb_fields.forEach(cf => {
-                        if (cf.type !== 'section' && cf.type !== 'image' && cf.id !== 'photo') {
-                            optionsHtml += `<option value="${cf.id}">${cf.label}</option>`;
-                        }
-                    });
-                }
-                
-                let html = '';
-                ie_importHeaders.forEach((h, idx) => {
-                    const hLower = h.toLowerCase().trim();
-                    let matchedId = '';
-                    
-                    if (typeof FB_STANDARD_FIELDS !== 'undefined') {
-                        FB_STANDARD_FIELDS.forEach(sf => {
-                            if (sf.label.toLowerCase() === hLower || sf.id.toLowerCase() === hLower) matchedId = sf.id;
-                        });
-                    }
-                    if (!matchedId && typeof fb_fields !== 'undefined') {
-                        fb_fields.forEach(cf => {
-                            if (cf.label.toLowerCase() === hLower || cf.id.toLowerCase() === hLower) matchedId = cf.id;
-                        });
-                    }
-                    
-                    let selectHtml = optionsHtml;
-                    if (matchedId) {
-                        selectHtml = selectHtml.replace(`value="${matchedId}"`, `value="${matchedId}" selected`);
-                    }
-                    
-                    html += `
-                        <div class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
-                            <label class="flex items-center gap-2 flex-1 cursor-pointer w-1/2 overflow-hidden">
-                                <input type="checkbox" value="${h}" id="ie-cb-${idx}" class="ie-import-cb accent-emerald-600 w-3.5 h-3.5 shrink-0" checked>
-                                <span class="text-[11px] font-bold text-slate-700 truncate" title="${h}">${h}</span>
-                            </label>
-                            <i class="fa-solid fa-arrow-right-long text-slate-300 text-[10px] shrink-0"></i>
-                            <select id="ie-sel-${idx}" class="ie-import-sel flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-1/2 truncate shrink-0">
-                                ${selectHtml}
-                            </select>
-                        </div>
-                    `;
-                });
-                
-                const grid = document.getElementById('ie-import-columns-grid');
-                grid.className = 'flex flex-col gap-2 max-h-60 overflow-y-auto custom-scroll pr-1';
-                grid.innerHTML = html;
-                document.getElementById('ie-import-mapping-container').classList.remove('hidden');
-                document.getElementById('ie-btn-import').classList.remove('hidden');
-            } else {
-                showToast("The selected Excel file is empty.", true);
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-    
-    async function ie_runImport() {
-        const btn = document.getElementById('ie-btn-import');
-        const origHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
-        btn.disabled = true;
-        
-        try {
-            const selectedInputs = Array.from(document.querySelectorAll('.ie-import-cb:checked'));
-            if (selectedInputs.length === 0) throw new Error("No columns selected for import.");
-            
-            const mapping = {};
-            selectedInputs.forEach(cb => {
-                const col = cb.value;
-                const idx = cb.id.replace('ie-cb-', '');
-                const sel = document.getElementById('ie-sel-' + idx);
-                let matchedId = sel ? sel.value : null;
-                
-                mapping[col] = matchedId || col.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-            });
-            
-            let importCount = 0;
-            const schoolId = (schoolConfig && schoolConfig.loginId) ? schoolConfig.loginId : (currentUser ? currentUser.userId : 'anonymous');
-            
-            for (let i = 0; i < ie_importParsedData.length; i++) {
-                const row = ie_importParsedData[i];
-                const record = {
-                    createdAt: Date.now(),
-                    schoolId: schoolId,
-                    deviceId: localStorage.getItem('device_id') || 'web-import',
-                    syncStatus: 'synced'
-                };
-                
-                let hasPhoto = false;
-                
-                selectedInputs.forEach(cb => {
-                    const col = cb.value;
-                    const val = row[col];
-                    const sysId = mapping[col];
-                    record[sysId] = val;
-                    
-                    if (sysId === 'photoData' || sysId === 'docUrl' || col.toLowerCase() === 'photo' || col.toLowerCase() === 'image') {
-                        if (val && val.length > 5) {
-                            record.docUrl = val;
-                            hasPhoto = true;
-                        }
-                    }
-                });
-                
-                if (hasPhoto) {
-                    record.status = 'unverified';
-                    record.verified = false; 
-                    record.returned = false;
-                } else {
-                    record.status = 'pending';
-                    record.verified = false;
-                    record.returned = false;
-                }
-                
-                record.id = 'draft_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + i;
-                db.unshift(record);
-                serverCallSilent('addRecord', [record], ()=>{}, ()=>{});
-                importCount++;
-                
-                // Update UI every 10 records and yield
-                if (importCount > 0 && importCount % 10 === 0) {
-                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Importing ${importCount} / ${ie_importParsedData.length}`;
-                    await new Promise(r => setTimeout(r, 0));
-                }
-            }
-            
-            filterRecords();
-            renderHomeAnalysis();
-            closeImportExportModal();
-            showModal('success', 'Import Successful', `Successfully imported ${importCount} records into the pending list.`);
-            ie_removeImportFile();
-        } catch(err) {
-            console.error(err);
-            showToast("Import failed: " + err.message, true);
-        } finally {
-            btn.innerHTML = origHTML;
-            btn.disabled = false;
-        }
-    }
-
-    let tempPreviewPhotoData = null;
-
-    window.openPreviewPhotoActionModal = function() {
-        if (!previewRecord) return;
-        const modal = document.getElementById('custom-modal');
-        const iconDiv = document.getElementById('modal-icon');
-        const actions = document.getElementById('modal-actions');
-        const closeIcon = document.getElementById('modal-close-icon');
-        
-        modal.classList.remove('hidden');
-        if (closeIcon) closeIcon.classList.remove('hidden');
-
-        document.getElementById('modal-title').textContent = previewRecord.studentName || 'Student';
-        document.getElementById('modal-msg').textContent = 'Upload or capture a new photo.';
-        iconDiv.className = "w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center bg-emerald-50 text-emerald-600 border border-emerald-100";
-        iconDiv.innerHTML = '<i class="fa-solid fa-user-tie text-4xl"></i>';
-        
-        actions.innerHTML = `
-            <div class="flex flex-col gap-3 w-full">
-                <button onclick="closeModal(); triggerPreviewPopupUpload(false);" class="premium-btn-green py-3 !rounded-[18px] w-full flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-cloud-arrow-up text-sm"></i> Upload
-                </button>
-                <button onclick="closeModal(); triggerPreviewPopupUpload(true);" class="premium-btn-green py-3 !rounded-[18px] w-full flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-camera text-sm"></i> Capture
-                </button>
-            </div>
-        `;
-    };
-
-    window.triggerPreviewPopupUpload = function(capture) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        if (capture) input.capture = 'environment';
-        
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            setUploadFieldProgress('Compressing...', 10, true);
-            compressImage(file, (compFile, dataUrl) => {
-                tempPreviewPhotoData = dataUrl;
-                showPreviewPhotoOptionsModal();
-            });
-        };
-        input.click();
-    };
-
-    window.showPreviewPhotoOptionsModal = function() {
-        const modal = document.getElementById('custom-modal');
-        const iconDiv = document.getElementById('modal-icon');
-        const actions = document.getElementById('modal-actions');
-        
-        modal.classList.remove('hidden');
-        document.getElementById('modal-title').textContent = 'Photo Selected';
-        document.getElementById('modal-msg').textContent = 'What would you like to do with this photo?';
-        
-        iconDiv.className = "w-32 h-32 rounded-xl mx-auto mb-4 flex items-center justify-center overflow-hidden border-2 border-emerald-100 bg-black";
-        iconDiv.innerHTML = `<img src="${tempPreviewPhotoData}" class="w-full h-full object-contain">`;
-        
-        actions.innerHTML = `
-            <button onclick="closeModal(); openPreviewCropModal();" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 text-[13px]"><i class="fa-solid fa-crop-simple mr-1"></i> Crop</button>
-            <button onclick="closeModal(); savePreviewPopupPhoto();" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-[13px]"><i class="fa-solid fa-check mr-1"></i> Save</button>
-            <button onclick="closeModal(); tempPreviewPhotoData = null; openPreviewPhotoActionModal();" class="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 text-[13px]"><i class="fa-solid fa-trash mr-1"></i> Delete</button>
-        `;
-    };
-
-    window.openPreviewCropModal = function() {
-        if (!tempPreviewPhotoData) return;
-        const modal = document.getElementById('crop-modal');
-        const cropImg = document.getElementById('crop-modal-img');
-
-        cropImg.src = tempPreviewPhotoData;
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-
-        const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
-        const cWidth = pMeta.width || 600;
-        const cHeight = pMeta.height || 800;
-
-        if (window.cropperInstance) { window.cropperInstance.destroy(); }
-        window.cropperInstance = new Cropper(cropImg, {
-            aspectRatio: cWidth / cHeight,
-            viewMode: 1,
-            autoCropArea: 1,
-        });
-
-        const originalApplyCrop = window.applyCrop;
-        const originalCloseCropModal = window.closeCropModal;
-
-        window.applyCrop = function() {
-            if (!window.cropperInstance) return;
-            const pMeta = (typeof fb_standard_meta !== 'undefined' ? fb_standard_meta['photo'] : null) || (schoolConfig && schoolConfig.formMeta && schoolConfig.formMeta['photo']) || {};
-            const cWidth = pMeta.width || 600;
-            const cHeight = pMeta.height || 800;
-            const canvas = window.cropperInstance.getCroppedCanvas({ width: cWidth, height: cHeight });
-            if (canvas) {
-                tempPreviewPhotoData = canvas.toDataURL('image/jpeg', 0.6);
-            }
-            // Restore original functions
-            window.applyCrop = originalApplyCrop;
-            window.closeCropModal = originalCloseCropModal;
-            originalCloseCropModal();
-            showPreviewPhotoOptionsModal();
-        };
-
-        window.closeCropModal = function() {
-            // Restore original functions
-            window.applyCrop = originalApplyCrop;
-            window.closeCropModal = originalCloseCropModal;
-            originalCloseCropModal();
-            showPreviewPhotoOptionsModal();
-        };
-    };
-
-    window.savePreviewPopupPhoto = function() {
-        if (!previewRecord || !tempPreviewPhotoData) return;
-        commitUnsavedPreviewRecord();
-        
-        previewRecord.docUrl = tempPreviewPhotoData;
-        previewRecord.photoData = tempPreviewPhotoData;
-        previewRecord._displayPhotoSrc = tempPreviewPhotoData;
-        
-        // Move to unverified section
-        previewRecord.verified = false;
-        previewRecord.status = 'Pending';
-        previewRecord.returned = false;
-        
-        storeRecordInDb(previewRecord);
-        if (typeof queueServerDraftSync === 'function') queueServerDraftSync();
-        if (!String(previewRecord.id).startsWith('draft_') && !String(previewRecord.id).startsWith('TEMP_')) {
-            serverCallSilent('updateRecord', [previewRecord]);
-        }
-        
-        showToast('Photo saved. Card moved to Unverified.');
-        
-        tempPreviewPhotoData = null;
-        setBlankRecordMode('none');
-        renderCurrentRecordsPage();
-    };
-    </script>
-
-    <!-- Swipe to Back Functionality -->
-    <script>
-    (function() {
-        let touchstartX = 0;
-        let touchstartY = 0;
-        const SWIPE_THRESHOLD = 50; 
-        const EDGE_THRESHOLD = 50; 
-
-        document.addEventListener('touchstart', e => {
-            if (!e.changedTouches || e.changedTouches.length === 0) return;
-            touchstartX = e.changedTouches[0].screenX;
-            touchstartY = e.changedTouches[0].screenY;
-        }, {passive: true});
-
-        document.addEventListener('touchend', e => {
-            if (!e.changedTouches || e.changedTouches.length === 0) return;
-            const touchendX = e.changedTouches[0].screenX;
-            const touchendY = e.changedTouches[0].screenY;
-            
-            if (touchstartX > EDGE_THRESHOLD) return;
-            
-            const deltaX = touchendX - touchstartX;
-            const deltaY = Math.abs(touchendY - touchstartY);
-            
-            if (deltaX > SWIPE_THRESHOLD && deltaX > deltaY * 1.5) {
-                handleGlobalSwipeBack();
-            }
-        }, {passive: true});
-
-        function isVisible(el) {
-            if (!el) return false;
-            const style = window.getComputedStyle(el);
-            return style.display !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden' && !el.classList.contains('hidden') && !el.classList.contains('translate-y-full');
-        }
-
-        function handleGlobalSwipeBack() {
-            if (isVisible(document.getElementById('crop-modal'))) {
-                if(typeof closeCropModal === 'function') closeCropModal();
-                return;
-            }
-            if (isVisible(document.getElementById('custom-modal'))) {
-                if(typeof closeModal === 'function') closeModal();
-                return;
-            }
-            if (isVisible(document.getElementById('student-detail-popup'))) {
-                if(typeof closeStudentDetailPopup === 'function') closeStudentDetailPopup();
-                return;
-            }
-            if (isVisible(document.getElementById('account-modal'))) {
-                if(typeof closeAccountModal === 'function') closeAccountModal();
-                return;
-            }
-            if (isVisible(document.getElementById('school-config'))) {
-                if(typeof closeSchoolConfig === 'function') closeSchoolConfig();
-                return;
-            }
-            if (isVisible(document.getElementById('import-export-modal'))) {
-                if(typeof closeImportExportModal === 'function') closeImportExportModal();
-                return;
-            }
-            if (isVisible(document.getElementById('student-form-section'))) {
-                if(typeof closeStudentForm === 'function') closeStudentForm();
-                return;
-            }
-        }
-    })();
-    </script>
-</body>
-
-</html>
-
