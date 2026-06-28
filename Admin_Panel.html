@@ -74,13 +74,13 @@
 <body class="flex flex-col h-screen">
 
     <div id="initial-splash-screen" class="fixed inset-0 z-[99999] bg-[#f8fafd] flex flex-col items-center justify-center transition-opacity duration-500">
-        <div class="flex flex-col items-center justify-center drop-shadow-2xl">
+        <div class="flex flex-col items-center justify-center drop-shadow-2xl -mt-24">
             <img src="./idapplogo.png" class="w-[180px] h-[180px] object-contain mix-blend-multiply">
             <!-- 3 Loading Dots -->
-            <div class="flex space-x-2 justify-center items-center mt-4">
-                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div class="h-3 w-3 bg-[#05996c] rounded-full animate-bounce"></div>
+            <div class="flex space-x-3 justify-center items-center mt-4">
+                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div class="h-5 w-5 bg-[#05996c] rounded-full animate-bounce"></div>
             </div>
         </div>
     </div>
@@ -5568,7 +5568,7 @@
                         ${(isPreviewVerified || (rec.verified === 'Completed' && !isReturned)) ? 
                             (currentUser && currentUser.userId === 'admin' && rec.verified !== 'Completed' ? `
                             <!-- Admin Verified Actions Bar -->
-                            <div class="flex items-center justify-between gap-3 mt-2">
+                            <div class="flex items-center justify-between gap-3 mt-2 preview-action-bar">
                                 <button onclick="deleteFromPreview()" class="premium-btn-green flex-1 !py-2.5 !rounded-[18px] !bg-rose-500 hover:!bg-rose-600 !border-rose-600 shadow-sm text-[14px] flex items-center justify-center gap-2">
                                     <i class="fa-solid fa-trash-can"></i> Delete
                                 </button>
@@ -5579,7 +5579,7 @@
                             ` : ``) : `
                         <!-- Actions Bar -->
                         ${isPreviewFromSave ? `
-                        <div class="flex items-center gap-2 mt-1">
+                        <div class="flex items-center gap-2 mt-1 preview-action-bar">
                             <button onclick="editFromPreview()" class="w-10 h-10 shrink-0 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm" title="Edit Record">
                                 <i class="fa-solid fa-pen-to-square text-sm"></i>
                             </button>
@@ -5597,7 +5597,7 @@
                              </button>
                          </div>
                          ` : `
-                         <div class="flex items-center gap-3 mt-1">
+                         <div class="flex items-center gap-3 mt-1 preview-action-bar">
                              <button onclick="editFromPreview()" class="premium-btn-green flex-1 !py-4 !rounded-[18px] active:scale-95 transition-all">
                                  <i class="fa-solid fa-pen-to-square"></i> Edit
                              </button>
@@ -5663,17 +5663,6 @@
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Class wise records & filters</p>
                             </div>
                             <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-amber-500 transition-colors"></i>
-                        </div>
-
-                        <div onclick="openSchoolActivity()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-purple-300 group">
-                            <div class="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-sm">
-                                <i class="fa-solid fa-clock-rotate-left text-xl"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h4 class="text-sm font-black text-slate-800">School Activity</h4>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Login & Device Logs</p>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-slate-300 text-xs mr-1 group-hover:text-purple-500 transition-colors"></i>
                         </div>
 
                         <div onclick="openImportExportModal()" class="system-card p-5 rounded-2xl flex items-center gap-4 clickable-card hover:border-emerald-300 group">
@@ -7112,12 +7101,18 @@
                 const navButtons = document.querySelectorAll('.fixed.top-\\[100px\\]');
                 navButtons.forEach(btn => btn.style.display = 'none');
                 
+                // Hide the preview action buttons
+                const actionBars = document.querySelectorAll('.preview-action-bar');
+                actionBars.forEach(bar => bar.style.display = 'none');
+                
                 html2canvas(card, {
                     scale: 2, // High resolution
                     useCORS: true,
                     backgroundColor: '#1e293b' // match dark card background
                 }).then(canvas => {
                     navButtons.forEach(btn => btn.style.display = '');
+                    actionBars.forEach(bar => bar.style.display = '');
+                    
                     const imgData = canvas.toDataURL('image/jpeg', 0.95);
                     const link = document.createElement('a');
                     link.href = imgData;
@@ -7129,6 +7124,7 @@
                     showToast("Downloaded Successfully!");
                 }).catch(err => {
                     navButtons.forEach(btn => btn.style.display = '');
+                    actionBars.forEach(bar => bar.style.display = '');
                     console.error(err);
                     showToast("Error generating JPG");
                 });
