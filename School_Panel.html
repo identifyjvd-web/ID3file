@@ -672,7 +672,7 @@
             let previousBlankRecordMode = 'none';
             let previewRecord = null;
             let isPreviewFromSave = false;
-            const AUTO_LOGOUT_MS = 5 * 60 * 1000;
+            const AUTO_LOGOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
             let activeStatusFilter = 'all';
             let activeClassFilter = 'all';
 
@@ -1876,6 +1876,45 @@
                 container.addEventListener('touchcancel', handleSelectionZoneEvent);
                 container.addEventListener('click', handleContainerClick);
             }
+
+            const binContainer = document.getElementById('bin-content');
+            if (binContainer) {
+                binContainer.addEventListener('mousedown', handleBinSelectionZoneEvent);
+                binContainer.addEventListener('touchstart', handleBinSelectionZoneEvent, {passive: true});
+                binContainer.addEventListener('mouseup', handleBinSelectionZoneEvent);
+                binContainer.addEventListener('touchend', handleBinSelectionZoneEvent);
+                binContainer.addEventListener('mouseleave', handleBinSelectionZoneEvent);
+                binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
+                binContainer.addEventListener('click', handleBinContainerClick);
+            }
+        }
+
+        function handleBinSelectionZoneEvent(e) {
+            const zone = e.target.closest('.bin-selection-zone');
+            if (!zone) return;
+            const id = zone.dataset.id;
+            
+            if (e.type === 'mousedown' || e.type === 'touchstart') {
+                binLpStart(id);
+            } else if (['mouseup', 'touchend', 'mouseleave', 'touchcancel'].includes(e.type)) {
+                binLpCancel();
+            }
+        }
+
+        function handleBinContainerClick(e) {
+            const selectionZone = e.target.closest('.bin-selection-zone');
+            if (selectionZone) {
+                const id = selectionZone.dataset.id;
+                if (binSelectedRecords.size > 0) {
+                    e.stopPropagation(); e.preventDefault();
+                    if (typeof binLpDidTrigger !== 'undefined' && binLpDidTrigger) {
+                        binLpDidTrigger = false;
+                        return;
+                    }
+                    toggleBinSelection(id);
+                }
+            }
+        }
 
             function handleSelectionZoneEvent(e) {
                 const zone = e.target.closest('.record-selection-zone');
@@ -3497,10 +3536,11 @@
                             const isRecVerified = (r.verified === true || String(r.verified).toLowerCase() === 'true' || r.verified === 'Completed');
                             const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
                             if (isRecVerified) {
-                                const snVal = r.sn || (index + 1);
-                                return si + String(snVal).padStart(2, '0');
+                                const snVal = (r.sn && Number(r.sn) < 1000000000) ? r.sn : (index + 1);
+                                const year = new Date(r.createdAt || Date.now()).getFullYear().toString().slice(-2);
+                                return si + year + String(snVal).padStart(3, '0');
                             } else {
-                                return si + 'DRAFT_' + String(r.createdAt || Date.now()).slice(-6);
+                                return si + 'Draft' + String(r.createdAt || Date.now()).slice(-3);
                             }
                         })(),
                         'Id No': r.id || '',
@@ -3640,7 +3680,7 @@
                     binSelectedRecords.clear();
                     bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                     renderRecycleBin();
-                    renderCurrentRecordsPage();
+                    filterRecords();
                 });
             }
 
@@ -3649,7 +3689,7 @@
                 const ids = Array.from(binSelectedRecords);
                 let count = 0;
                 ids.forEach(id => {
-                    db = db.filter(r => String(r.id) !== String(id));
+                    db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     serverCallSilent('permanentDelete', [id]);
                     count++;
@@ -3658,7 +3698,7 @@
                 binSelectedRecords.clear();
                 bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                 renderRecycleBin();
-                renderCurrentRecordsPage();
+                filterRecords();
             }
 
             function renderRecycleBin() {
@@ -3700,7 +3740,7 @@
                         const isRecVerified = x.verified === true || String(x.verified).toLowerCase() === 'true';
                         
                         container.innerHTML += `
-                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''} onmousedown="binLpStart('${escapeInlineId(x.id)}')" onmouseup="binLpCancel()" onmouseleave="binLpCancel()" ontouchstart="binLpStart('${escapeInlineId(x.id)}')" ontouchend="binLpCancel()" ontouchcancel="binLpCancel()">
+                            <div class="flex items-stretch border-b border-gray-100 last:border-0 h-[72px] transition cursor-pointer hover:bg-slate-50/50 active:bg-emerald-50/40" ${binSelectedRecords.size > 0 ? `onclick="toggleBinSelection('${escapeInlineId(x.id)}')"` : ''}>
                                 <div class="flex flex-1 items-stretch min-w-0">
                                     <div class="w-16 bg-[var(--accent-soft)] flex-shrink-0 flex items-center justify-center border-r border-gray-50 relative overflow-hidden">
                                         ${(photoSrc && photoSrc.length > 8) ? `<img src="${photoSrc}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="text-2xl font-black text-emerald-600/20" style="display:none">${initial}</span>` : `<span class="text-2xl font-black text-emerald-600/20">${initial}</span>`}
@@ -3710,7 +3750,7 @@
                                         <div class="text-[11.5px] text-slate-500 font-bold truncate whitespace-nowrap">${(x.gender || '').toLowerCase().includes('female') ? 'D/o' : 'S/o'}: ${sanitizeHTML(x.fatherName || '-')}</div>
                                     </div>
                                 </div>
-                                <div class="px-4 flex items-center justify-end gap-3 min-w-[120px]" onmousedown="binLpStart('${escapeInlineId(x.id)}')" onmouseup="binLpCancel()" onmouseleave="binLpCancel()" ontouchstart="binLpStart('${escapeInlineId(x.id)}')" ontouchend="binLpCancel()" ontouchcancel="binLpCancel()">
+                                <div class="px-4 flex items-center justify-end gap-3 min-w-[120px] bin-selection-zone" data-id="${escapeInlineId(x.id)}">
                                     <div class="flex flex-col items-end justify-center gap-0.5">
                                         <div class="text-[12px] font-black text-emerald-600 uppercase tracking-tight">${sanitizeHTML(x.sclass || '-')}</div>
                                         <div class="flex items-center gap-1 opacity-60">
@@ -3867,7 +3907,7 @@
                         return;
                     }
                     
-                    db = db.filter(r => r.id !== id);
+                    db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
                     if (typeof window.queueServerDraftSync === 'function') window.queueServerDraftSync();
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     serverCallSilent('permanentDelete', [id], ()=>{}, ()=>{});
@@ -3876,7 +3916,7 @@
                     showToast('Record Permanently Deleted');
                     bin = db.filter(r => r.isDeleted === true || String(r.isDeleted).toLowerCase() === 'true');
                     renderRecycleBin();
-                    renderCurrentRecordsPage();
+                    filterRecords();
             }
 
             function restoreRecord(id) {
@@ -3910,7 +3950,7 @@
             function permDelete(id) {
                 const item = findRecordById(bin, id);
                 if (item) {
-                    db = db.filter(r => String(r.id) !== String(id));
+                    db = db.filter(r => normalizeRecordId(r.id) !== normalizeRecordId(id));
                     try { if (window.idbDelete) idbDelete(IDB_STORE_RECORDS, id).catch(()=>{}); } catch(e){}
                     addActivity('PERM_DELETE', item);
                 }
@@ -4829,22 +4869,28 @@
                         renderHomeAnalysis();
                         filterRecords();
                         if (eid) {
-                            const isVerified = rec && rec.verified && String(rec.verified).toLowerCase() !== 'false';
-                            const modalTitle = isVerified ? 'Verified & Saved Successfully' : 'Saved Successfully';
-                            showModal('success', modalTitle, '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
+                            showModal('success', 'Data Updated Successfully', '', null, 'Yes, Delete', `${(n || '').trim()}'s Data`);
                         }
                         setSyncStatus('');
                         if (blankRecordMode === 'preview') renderCurrentRecordsPage();
                     };
 
                     isPreviewFromSave = !eid;
-                    isSavingRecord = false;
-                    toggleSaveLoading(false);
                     const _immediatePhotoSrc = _getPreviewPhotoSrc();
-                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc, _isUnsaved: true, _eid: eid };
-                    setBlankRecordMode('preview');
+                    previewRecord = { ...rec, _displayPhotoSrc: _immediatePhotoSrc, _isUnsaved: !eid, _eid: eid };
+                    
+                    if (eid) {
+                        try { if (window.idbPut) idbPut(IDB_STORE_RECORDS, previewRecord).catch(()=>{}); } catch(e){}
+                        serverCallSilent('updateRecord', [previewRecord], () => {});
+                        finalizeSave();
+                        closeStudentForm();
+                    } else {
+                        isSavingRecord = false;
+                        toggleSaveLoading(false);
+                        setBlankRecordMode('preview');
+                    }
 
-                    // Data is no longer saved locally or remotely here.
+                    // Data is no longer saved locally or remotely here for add mode.
                     // It will be saved when "Save & New" or "Verify" is clicked on the preview card.
                 } catch (error) {
                     console.error('Save error:', error);
@@ -5798,10 +5844,11 @@
                                         const isRecVerified = (rec.verified === true || String(rec.verified).toLowerCase() === 'true' || rec.verified === 'Completed');
                                         const si = (schoolConfig.name || "DPS").trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase() || "DPS";
                                         if (isRecVerified) {
-                                            const snVal = rec.sn || '0';
-                                            return si + String(snVal).padStart(2, '0');
+                                            const snVal = (rec.sn && Number(rec.sn) < 1000000000) ? rec.sn : '0';
+                                            const year = new Date(rec.createdAt || Date.now()).getFullYear().toString().slice(-2);
+                                            return si + year + String(snVal).padStart(3, '0');
                                         } else {
-                                            return si + 'DRAFT_' + String(rec.createdAt || Date.now()).slice(-6);
+                                            return si + 'Draft' + String(rec.createdAt || Date.now()).slice(-3);
                                         }
                                     })() }</div>
                                 </div>
@@ -7162,7 +7209,7 @@
                         let localMaxSn = 0;
                         db.forEach(r => {
                             if (r.id && !r.id.startsWith('draft_') && typeof r.sn === 'number') {
-                                if (r.sn > localMaxSn) localMaxSn = r.sn;
+                                if (r.sn < 1000000000 && r.sn > localMaxSn) localMaxSn = r.sn;
                             }
                         });
                         
@@ -9807,3 +9854,4 @@
 </body>
 
 </html>
+
