@@ -12,6 +12,7 @@
     <title id="page-title">IDentify</title>
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
@@ -1582,19 +1583,18 @@
                 container.addEventListener('mouseleave', handleSelectionZoneEvent);
                 container.addEventListener('touchcancel', handleSelectionZoneEvent);
                 container.addEventListener('click', handleContainerClick);
-            }
 
-            const binContainer = document.getElementById('bin-content');
-            if (binContainer) {
-                binContainer.addEventListener('mousedown', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchstart', handleBinSelectionZoneEvent, {passive: true});
-                binContainer.addEventListener('mouseup', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchend', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('mouseleave', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('click', handleBinContainerClick);
+                const binContainer = document.getElementById('bin-content');
+                if (binContainer) {
+                    binContainer.addEventListener('mousedown', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchstart', handleBinSelectionZoneEvent, {passive: true});
+                    binContainer.addEventListener('mouseup', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchend', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('mouseleave', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('click', handleBinContainerClick);
+                }
             }
-        }
 
         function handleBinSelectionZoneEvent(e) {
             const zone = e.target.closest('.bin-selection-zone');
@@ -5482,7 +5482,7 @@
                         }
 
                         t.innerHTML = `
-                <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 relative" ${isPreviewFromSave ? '' : 'ontouchstart="handlePreviewTouchStart(event)" ontouchend="handlePreviewTouchEnd(event)"'}>
+                <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 relative" ${isPreviewFromSave ? '' : 'onmousedown="handlePreviewTouchStart(event)" onmouseup="handlePreviewTouchEnd(event)" onmouseleave="handlePreviewTouchCancel(event)" ontouchstart="handlePreviewTouchStart(event)" ontouchend="handlePreviewTouchEnd(event)" ontouchcancel="handlePreviewTouchCancel(event)"'}>
                     
                     ${isPreviewFromSave ? '' : `
                     <!-- Left Navigation Zone (Previous Card) -->
@@ -7098,13 +7098,60 @@
             }
 
             let _previewTouchStartX = 0;
+            let _previewLpTimer = null;
+            let _previewLpDidTrigger = false;
+
+            function downloadPreviewCardAsJpg() {
+                const card = document.querySelector('.preview-dark-card');
+                if (!card) return;
+                
+                showToast("Generating JPG...");
+                if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                
+                // Hide the navigation buttons temporarily so they don't appear in the image
+                const navButtons = document.querySelectorAll('.fixed.top-\\[100px\\]');
+                navButtons.forEach(btn => btn.style.display = 'none');
+                
+                html2canvas(card, {
+                    scale: 2, // High resolution
+                    useCORS: true,
+                    backgroundColor: '#1e293b' // match dark card background
+                }).then(canvas => {
+                    navButtons.forEach(btn => btn.style.display = '');
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    const link = document.createElement('a');
+                    link.href = imgData;
+                    const sn = previewRecord ? previewRecord.sn : 'Unknown';
+                    link.download = `ID_Card_${sn}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast("Downloaded Successfully!");
+                }).catch(err => {
+                    navButtons.forEach(btn => btn.style.display = '');
+                    console.error(err);
+                    showToast("Error generating JPG");
+                });
+            }
+
             function handlePreviewTouchStart(e) {
+                _previewLpDidTrigger = false;
                 if (e.changedTouches && e.changedTouches.length > 0) {
                     _previewTouchStartX = e.changedTouches[0].screenX;
+                } else if (e.screenX) {
+                    _previewTouchStartX = e.screenX; // For mouse
                 }
+                
+                _previewLpTimer = setTimeout(() => {
+                    _previewLpDidTrigger = true;
+                    downloadPreviewCardAsJpg();
+                }, 700); // 700ms long press
             }
 
             function handlePreviewTouchEnd(e) {
+                if (_previewLpTimer) clearTimeout(_previewLpTimer);
+                if (_previewLpDidTrigger) return;
+                
                 if (e.changedTouches && e.changedTouches.length > 0) {
                     let touchEndX = e.changedTouches[0].screenX;
                     let diff = touchEndX - _previewTouchStartX;
@@ -7117,7 +7164,19 @@
                         if (navigator.vibrate) navigator.vibrate(15);
                         openNextPreview();
                     }
+                } else if (e.screenX) {
+                    let mouseEndX = e.screenX;
+                    let diff = mouseEndX - _previewTouchStartX;
+                    if (diff > 60) {
+                        openPrevPreview();
+                    } else if (diff < -60) {
+                        openNextPreview();
+                    }
                 }
+            }
+
+            function handlePreviewTouchCancel(e) {
+                if (_previewLpTimer) clearTimeout(_previewLpTimer);
             }
 
             let _homeTouchStartX = 0;

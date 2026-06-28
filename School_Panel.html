@@ -1875,19 +1875,18 @@
                 container.addEventListener('mouseleave', handleSelectionZoneEvent);
                 container.addEventListener('touchcancel', handleSelectionZoneEvent);
                 container.addEventListener('click', handleContainerClick);
-            }
 
-            const binContainer = document.getElementById('bin-content');
-            if (binContainer) {
-                binContainer.addEventListener('mousedown', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchstart', handleBinSelectionZoneEvent, {passive: true});
-                binContainer.addEventListener('mouseup', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchend', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('mouseleave', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
-                binContainer.addEventListener('click', handleBinContainerClick);
+                const binContainer = document.getElementById('bin-content');
+                if (binContainer) {
+                    binContainer.addEventListener('mousedown', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchstart', handleBinSelectionZoneEvent, {passive: true});
+                    binContainer.addEventListener('mouseup', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchend', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('mouseleave', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('touchcancel', handleBinSelectionZoneEvent);
+                    binContainer.addEventListener('click', handleBinContainerClick);
+                }
             }
-        }
 
         function handleBinSelectionZoneEvent(e) {
             const zone = e.target.closest('.bin-selection-zone');
